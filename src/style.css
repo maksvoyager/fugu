@@ -43,7 +43,9 @@ button { font: inherit; }
     linear-gradient(180deg, #22baf0 0%, #078acb 34%, #0769b2 68%, #074c91 100%);
   box-shadow: none;
   touch-action: none;
+  overscroll-behavior: none;
   user-select: none;
+  -webkit-user-select: none;
   isolation: isolate;
 }
 
@@ -55,6 +57,10 @@ button { font: inherit; }
   display: block;
   width: 100% !important;
   height: 100% !important;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .water-rays {

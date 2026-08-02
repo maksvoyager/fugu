@@ -22,6 +22,13 @@ const QA_NEXT_LEVEL = Number.parseInt(URL_OPTIONS.get('qaNextLevel') || '', 10) 
 const QA_NEXT_PREVIEW_LEVEL = Number.parseInt(URL_OPTIONS.get('qaNextPreview') || '', 10) - 1;
 const DEBUG_GAME_OVER_LINE = URL_OPTIONS.has('debugGameOverLine');
 const MAX_LEVEL_INDEX = FRUITS.length - 1;
+const CONTROL_STATES = Object.freeze({
+  WAITING: 'waiting',
+  DRAGGING: 'dragging',
+  RELEASED: 'released',
+});
+// Минимальный диаметр удобной сенсорной зоны вокруг текущей рыбы.
+const MIN_DRAG_HIT_DIAMETER_CSS = 72;
 
 function viewportSize() {
   const viewport = window.visualViewport;
@@ -103,6 +110,11 @@ class FruitScene extends Phaser.Scene {
     this.currentFruit = null;
     this.nextLevel = 0;
     this.canDrop = false;
+    this.controlState = CONTROL_STATES.RELEASED;
+    this.activePointerId = null;
+    this.activeNativePointerId = null;
+    this.dragOffsetX = 0;
+    this.lastDragX = GAME_WIDTH / 2;
     this.gameEnded = false;
     this.isPaused = false;
   }
@@ -130,6 +142,11 @@ class FruitScene extends Phaser.Scene {
     this.bestScore = readBestScore();
     this.currentFruit = null;
     this.canDrop = false;
+    this.controlState = CONTROL_STATES.RELEASED;
+    this.activePointerId = null;
+    this.activeNativePointerId = null;
+    this.dragOffsetX = 0;
+    this.lastDragX = GAME_WIDTH / 2;
     this.gameEnded = false;
     this.isPaused = false;
 
@@ -151,8 +168,23 @@ class FruitScene extends Phaser.Scene {
     this.resetInterface();
     this.createBackdrop();
     this.scale.on('resize', this.handleGameResize, this);
+    this.handleWindowPointerUp = (event) => {
+      if (this.controlState !== CONTROL_STATES.DRAGGING) return;
+      if (this.activeNativePointerId !== null && event.pointerId !== this.activeNativePointerId) return;
+      this.releaseCurrentFruit();
+    };
+    this.handlePointerCancel = () => this.cancelCurrentFruitDrag();
+    this.handleWindowBlur = () => this.cancelCurrentFruitDrag();
+    window.addEventListener('pointerup', this.handleWindowPointerUp);
+    window.addEventListener('pointercancel', this.handlePointerCancel);
+    window.addEventListener('touchcancel', this.handlePointerCancel, { passive: false });
+    window.addEventListener('blur', this.handleWindowBlur);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.handleGameResize, this);
+      window.removeEventListener('pointerup', this.handleWindowPointerUp);
+      window.removeEventListener('pointercancel', this.handlePointerCancel);
+      window.removeEventListener('touchcancel', this.handlePointerCancel);
+      window.removeEventListener('blur', this.handleWindowBlur);
     });
     this.createInvisibleBounds();
 
@@ -160,8 +192,11 @@ class FruitScene extends Phaser.Scene {
     this.matter.world.engine.velocityIterations = 6;
     this.matter.world.on('collisionstart', this.handleCollisions, this);
     this.matter.world.on('collisionend', this.handleCollisionEnd, this);
-    this.input.on('pointermove', this.moveCurrentFruit, this);
-    this.input.on('pointerdown', this.dropCurrentFruit, this);
+    this.input.on('pointerdown', this.beginCurrentFruitDrag, this);
+    this.input.on('pointermove', this.dragCurrentFruit, this);
+    this.input.on('pointerup', this.releaseCurrentFruit, this);
+    this.input.on('pointerupoutside', this.releaseCurrentFruit, this);
+    this.input.on('pointercancel', this.cancelCurrentFruitDrag, this);
 
     this.nextLevel = Number.isInteger(QA_NEXT_LEVEL) && QA_NEXT_LEVEL >= 0 && QA_NEXT_LEVEL < FRUITS.length
       ? QA_NEXT_LEVEL
@@ -347,7 +382,8 @@ class FruitScene extends Phaser.Scene {
       this.seabed.setScale(GAME_WIDTH / this.seabed.width);
     }
 
-    this.guide = this.add.graphics().setDepth(1);
+    // Graphics создаётся один раз; дальше линия только перерисовывается и меняет видимость.
+    this.guide = this.add.graphics().setDepth(1).setVisible(false);
     this.recalculateGameOverLine();
     this.createGameOverDebugLine();
   }
@@ -416,10 +452,7 @@ class FruitScene extends Phaser.Scene {
     if (this.currentFruit?.isHeld) {
       const radius = FRUITS[this.currentFruit.level].radius;
       const x = Phaser.Math.Clamp(this.currentFruit.visual.x, WALL_SIZE + radius, GAME_WIDTH - WALL_SIZE - radius);
-      this.currentFruit.visual.setPosition(x, spawnY());
-      this.currentFruit.label?.setPosition(x, spawnY());
-      this.currentFruit.shine?.setPosition(x - radius * 0.28, spawnY() - radius * 0.3);
-      this.drawGuide(x, radius);
+      this.positionCurrentFruit(x);
     }
 
     this.recalculateGameOverLine();
@@ -437,6 +470,12 @@ class FruitScene extends Phaser.Scene {
     this.updateNextPreview();
     this.currentFruit = this.createFruit(GAME_WIDTH / 2, spawnY(), level, true);
     this.canDrop = true;
+    this.controlState = CONTROL_STATES.WAITING;
+    this.activePointerId = null;
+    this.activeNativePointerId = null;
+    this.dragOffsetX = 0;
+    this.lastDragX = GAME_WIDTH / 2;
+    this.positionCurrentFruit(this.lastDragX);
   }
 
   createFruit(x, y, level, isHeld = false) {
@@ -526,31 +565,98 @@ class FruitScene extends Phaser.Scene {
     fruit.shine?.setPosition(x - radius * 0.28, y - radius * 0.3).setRotation(rotation);
   }
 
-  moveCurrentFruit(pointer) {
+  getCurrentFruitHitRadius() {
+    if (!this.currentFruit) return 0;
+    const canvasWidth = Math.max(1, this.game.canvas.getBoundingClientRect().width);
+    const minimumWorldRadius = (MIN_DRAG_HIT_DIAMETER_CSS * GAME_WIDTH / canvasWidth) / 2;
+    const visualRadius = Math.max(
+      this.currentFruit.visual.displayWidth,
+      this.currentFruit.visual.displayHeight,
+    ) / 2;
+    return Math.max(minimumWorldRadius, visualRadius);
+  }
+
+  isPointerOnCurrentFruit(pointer) {
+    if (!this.currentFruit || !Number.isFinite(pointer.worldX) || !Number.isFinite(pointer.worldY)) return false;
+    const dx = pointer.worldX - this.currentFruit.visual.x;
+    const dy = pointer.worldY - this.currentFruit.visual.y;
+    return Math.hypot(dx, dy) <= this.getCurrentFruitHitRadius();
+  }
+
+  beginCurrentFruitDrag(pointer) {
     if (!this.currentFruit || !this.canDrop || this.gameEnded || this.isPaused) return;
+    if (this.controlState !== CONTROL_STATES.WAITING || !this.isPointerOnCurrentFruit(pointer)) return;
+
+    pointer.event?.preventDefault?.();
+    this.controlState = CONTROL_STATES.DRAGGING;
+    this.activePointerId = pointer.id;
+    this.activeNativePointerId = pointer.event?.pointerId ?? null;
+    this.dragOffsetX = this.currentFruit.visual.x - pointer.worldX;
+    this.lastDragX = this.currentFruit.visual.x;
+
+    const target = pointer.event?.currentTarget || pointer.event?.target;
+    if (target?.setPointerCapture && this.activeNativePointerId !== null) {
+      try {
+        target.setPointerCapture(this.activeNativePointerId);
+      } catch {
+        // Некоторые мобильные браузеры сами удерживают pointer capture для canvas.
+      }
+    }
+  }
+
+  positionCurrentFruit(rawX) {
+    if (!this.currentFruit) return;
     const radius = FRUITS[this.currentFruit.level].radius;
-    const x = Phaser.Math.Clamp(pointer.worldX, WALL_SIZE + radius, GAME_WIDTH - WALL_SIZE - radius);
+    const x = Phaser.Math.Clamp(rawX, WALL_SIZE + radius, GAME_WIDTH - WALL_SIZE - radius);
+    this.lastDragX = x;
     this.currentFruit.visual.setPosition(x, spawnY());
     this.currentFruit.label?.setPosition(x, spawnY());
     this.currentFruit.shine?.setPosition(x - radius * 0.28, spawnY() - radius * 0.3);
     this.drawGuide(x, radius);
   }
 
+  dragCurrentFruit(pointer) {
+    if (!this.currentFruit || this.gameEnded || this.isPaused) return;
+    if (this.controlState !== CONTROL_STATES.DRAGGING || pointer.id !== this.activePointerId) return;
+    if (!Number.isFinite(pointer.worldX)) return;
+    pointer.event?.preventDefault?.();
+    this.positionCurrentFruit(pointer.worldX + this.dragOffsetX);
+  }
+
   drawGuide(x, radius) {
     this.guide.clear();
     this.guide.lineStyle(2, 0xffffff, 0.22);
-    this.guide.lineBetween(x, spawnY() - radius - 9, x, SURFACE_Y + 26);
+    this.guide.lineBetween(x, spawnY(), x, SURFACE_Y + 26);
+    this.guide.setVisible(true);
   }
 
-  dropCurrentFruit(pointer) {
+  releaseCurrentFruit(pointer = null) {
     if (!this.currentFruit || !this.canDrop || this.gameEnded || this.isPaused) return;
-    this.moveCurrentFruit(pointer);
+    if (this.controlState !== CONTROL_STATES.DRAGGING) return;
+    if (pointer?.id !== undefined && pointer.id !== this.activePointerId) return;
+
+    if (pointer && Number.isFinite(pointer.worldX)) this.dragCurrentFruit(pointer);
+    this.positionCurrentFruit(this.lastDragX);
+    this.controlState = CONTROL_STATES.RELEASED;
+    this.activePointerId = null;
+    this.activeNativePointerId = null;
+    this.dragOffsetX = 0;
     this.canDrop = false;
-    this.guide.clear();
+    this.guide.setVisible(false);
     this.activateFruitPhysics(this.currentFruit);
     this.currentFruit.physics.setVelocity(0, -0.35);
     this.currentFruit = null;
     this.time.delayedCall(GAMEPLAY.spawnDelay, () => this.spawnFruit());
+  }
+
+  cancelCurrentFruitDrag(pointer = null) {
+    if (this.controlState !== CONTROL_STATES.DRAGGING) return;
+    if (pointer?.id !== undefined && pointer.id !== this.activePointerId) return;
+    this.controlState = CONTROL_STATES.WAITING;
+    this.activePointerId = null;
+    this.activeNativePointerId = null;
+    this.dragOffsetX = 0;
+    if (this.currentFruit) this.positionCurrentFruit(this.lastDragX);
   }
 
   handleCollisions(event) {
@@ -820,6 +926,7 @@ class FruitScene extends Phaser.Scene {
 
   setPaused(value) {
     if (this.gameEnded || this.isPaused === value) return;
+    if (value) this.cancelCurrentFruitDrag();
     this.isPaused = value;
     ui.pauseModal.hidden = !value;
     ui.pauseButton.setAttribute('aria-label', value ? 'Продолжить игру' : 'Пауза');
@@ -833,6 +940,7 @@ class FruitScene extends Phaser.Scene {
     } else {
       this.time.paused = false;
       this.matter.world.resume();
+      if (this.currentFruit?.isHeld) this.positionCurrentFruit(this.lastDragX);
     }
   }
 
@@ -840,7 +948,11 @@ class FruitScene extends Phaser.Scene {
     if (this.gameEnded) return;
     this.gameEnded = true;
     this.canDrop = false;
+    this.controlState = CONTROL_STATES.RELEASED;
+    this.activePointerId = null;
+    this.activeNativePointerId = null;
     this.guide.clear();
+    this.guide.setVisible(false);
     ui.warning.classList.remove('is-visible');
     ui.gameWrap.classList.remove('is-danger');
     this.matter.world.pause();
