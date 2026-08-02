@@ -95,13 +95,14 @@ button { font: inherit; }
 .hud {
   position: absolute;
   z-index: 20;
-  top: max(18px, env(safe-area-inset-top));
-  left: 18px;
-  right: 18px;
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
-  align-items: start;
-  gap: 12px;
+  top: max(6px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  left: max(8px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: clamp(4px, 1.5vw, 10px);
+  min-width: 0;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -136,24 +137,37 @@ button { font: inherit; }
   pointer-events: none;
 }
 
-.score-bubble {
-  width: fit-content;
-  min-width: 104px;
-  min-height: 64px;
-  padding: 11px 19px 10px;
-  border-radius: 31px 36px 32px 35px;
+.hud-stat {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: clamp(3px, 1vw, 7px);
+  color: #fff;
   text-shadow: 0 3px 7px rgba(0,63,123,.35);
+  pointer-events: auto;
 }
-.score-bubble span,
-.next-bubble > span,
+.hud-stat + .hud-stat {
+  border-left: 1px solid rgba(255,255,255,.3);
+  padding-left: clamp(4px, 1.3vw, 9px);
+}
+.hud-label,
 .results span {
   display: block;
-  font-size: 10px;
+  font-size: clamp(7px, 2.1vw, 10px);
   font-weight: 900;
-  letter-spacing: .13em;
-  opacity: .88;
+  letter-spacing: .06em;
+  opacity: .9;
 }
-.score-bubble strong { display: block; margin-top: -2px; font-size: 31px; font-weight: 900; line-height: 1; }
+.hud-stat strong {
+  display: block;
+  min-width: 1ch;
+  font-size: clamp(14px, 4.2vw, 20px);
+  font-weight: 900;
+  line-height: 1;
+}
+.next-bubble { flex: 1 1 auto; }
+.score-bubble,
+.best-bubble { flex: 0 1 auto; }
 
 .bubble-button {
   pointer-events: auto;
@@ -167,17 +181,20 @@ button { font: inherit; }
 .bubble-button:focus-visible { outline: 3px solid rgba(255,255,255,.75); outline-offset: 3px; }
 
 .pause-button {
-  grid-column: 4;
   display: flex;
+  flex: 0 0 44px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  width: 64px;
-  height: 64px;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
+  border-width: 1px;
   border-radius: 48% 52% 50% 47%;
 }
-.pause-button span { width: 8px; height: 28px; border-radius: 99px; background: #fff; box-shadow: 0 3px 6px rgba(0,75,135,.28); }
+.pause-button span { width: 5px; height: 19px; border-radius: 99px; background: #fff; box-shadow: 0 2px 4px rgba(0,75,135,.28); }
 .pause-button.is-bouncing { animation: button-bounce .36s ease-out; }
 
 .progression {
@@ -194,7 +211,7 @@ button { font: inherit; }
   gap: var(--progress-gap);
   width: auto;
   padding: 0;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .progress-slot {
@@ -287,30 +304,19 @@ button { font: inherit; }
 .warning.is-visible { opacity: 1; transform: translate(-50%, 0); }
 
 .next-bubble {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 92px;
-  min-height: 64px;
-  padding: 9px 11px;
-  border-radius: 31px 35px 30px 33px;
-  text-shadow: 0 3px 7px rgba(0,63,123,.35);
+  overflow: visible;
 }
-.next-bubble > span { max-width: 42px; font-size: 7px; line-height: 1.05; }
 .next-fruit {
   display: grid;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
-  margin-top: 0;
+  flex: 0 0 clamp(28px, 8vw, 34px);
+  width: clamp(28px, 8vw, 34px);
+  height: clamp(26px, 7.5vw, 32px);
   place-items: center;
-  border: 2px solid rgba(255,255,255,.72);
-  border-radius: 50%;
+  overflow: visible;
   color: #fff;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 900;
   text-shadow: 0 2px 4px rgba(0,70,120,.35);
-  box-shadow: inset 0 -7px 9px rgba(0,53,103,.14), 0 4px 10px rgba(0,74,135,.22);
 }
 .hint {
   position: absolute;
@@ -327,6 +333,15 @@ button { font: inherit; }
   white-space: nowrap;
   text-shadow: 0 2px 5px rgba(0,56,110,.35);
   pointer-events: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity .3s ease, transform .3s ease, visibility 0s linear 0s;
+}
+.hint.is-hidden {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity .3s ease, transform .3s ease, visibility 0s linear .3s;
 }
 
 .modal[hidden] { display: none; }
@@ -375,14 +390,11 @@ button { font: inherit; }
 @keyframes modal-in { from { opacity: 0; transform: scale(.83) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 
 @media (max-width: 370px) {
-  .hud { top: 12px; left: 12px; right: 12px; gap: 8px; }
-  .score-bubble { min-width: 84px; min-height: 55px; padding: 8px 13px; }
-  .score-bubble strong { font-size: 27px; }
-  .pause-button { width: 55px; height: 55px; }
+  .hud { gap: 4px; }
+  .hud-stat { gap: 3px; }
+  .hud-stat + .hud-stat { padding-left: 4px; }
+  .hud-label { letter-spacing: .025em; }
   .progression { right: 6px; bottom: 14px; left: 6px; padding: 0; }
-  .next-bubble { min-width: 78px; min-height: 55px; padding: 7px 8px; gap: 5px; }
-  .next-bubble > span { max-width: 34px; font-size: 6px; }
-  .next-fruit { flex-basis: 31px; width: 31px; height: 31px; font-size: 17px; }
   .hint { bottom: 72px; font-size: 8px; }
 }
 

@@ -24,6 +24,7 @@ export const STARTING_LEVELS = 1;
 // Основные параметры поведения воды и проигрыша.
 export const GAMEPLAY = {
   maxLevelMergeScore: 3200,
+  riseSpeedMultiplier: 1.2,
   buoyancyForce: -0.000264,
   surfaceFadeDistance: 110,
   waterDrag: 0.045,

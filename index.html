@@ -20,14 +20,19 @@
         <div class="surface-glow" aria-hidden="true"></div>
 
         <header class="hud">
-          <div class="next-bubble bubble-panel">
-            <span>СЛЕДУЮЩАЯ</span>
+          <div class="hud-stat next-bubble" data-game-ui>
+            <span class="hud-label">СЛЕДУЮЩАЯ</span>
             <div id="next-fruit" class="next-fruit" aria-label="Следующая рыбка"></div>
           </div>
 
-          <div class="score-bubble bubble-panel" aria-live="polite">
-            <span>СЧЁТ</span>
+          <div class="hud-stat score-bubble" data-game-ui aria-live="polite">
+            <span class="hud-label">СЧЁТ</span>
             <strong id="score">0</strong>
+          </div>
+
+          <div class="hud-stat best-bubble" data-game-ui aria-live="polite">
+            <span class="hud-label">ЛУЧШИЙ</span>
+            <strong id="hud-best-score">0</strong>
           </div>
 
           <button id="pause-button" class="pause-button bubble-button" type="button" aria-label="Пауза">
@@ -38,8 +43,8 @@
 
         <div id="warning" class="warning" role="status">Рыбкам становится тесно</div>
 
-        <div id="progression" class="progression" aria-label="Открытые уровни рыбок"></div>
-        <p class="hint">Двигайте · коснитесь, чтобы отпустить</p>
+        <div id="progression" class="progression" data-game-ui aria-label="Открытые уровни рыбок"></div>
+        <p id="control-hint" class="hint">Удерживайте и двигайте · отпустите, чтобы запустить</p>
 
         <div id="pause-modal" class="modal" hidden>
           <div class="modal-card bubble-panel">

@@ -27,8 +27,6 @@ const CONTROL_STATES = Object.freeze({
   DRAGGING: 'dragging',
   RELEASED: 'released',
 });
-// Минимальный диаметр удобной сенсорной зоны вокруг текущей рыбы.
-const MIN_DRAG_HIT_DIAMETER_CSS = 72;
 
 function viewportSize() {
   const viewport = window.visualViewport;
@@ -59,7 +57,9 @@ FRUITS.forEach((config, index) => {
 const ui = {
   gameWrap: document.querySelector('#game-wrap'),
   score: document.querySelector('#score'),
+  hudBestScore: document.querySelector('#hud-best-score'),
   nextFish: document.querySelector('#next-fruit'),
+  controlHint: document.querySelector('#control-hint'),
   warning: document.querySelector('#warning'),
   pauseButton: document.querySelector('#pause-button'),
   pauseModal: document.querySelector('#pause-modal'),
@@ -75,6 +75,8 @@ const ui = {
 
 const warnedProgressAssets = new Set();
 let warnedMissingSeabedForGameOver = false;
+// Флаг живёт до перезагрузки страницы и не сбрасывается при рестарте Phaser-сцены.
+let hasCompletedFirstDrop = false;
 
 function readBestScore() {
   try {
@@ -565,27 +567,21 @@ class FruitScene extends Phaser.Scene {
     fruit.shine?.setPosition(x - radius * 0.28, y - radius * 0.3).setRotation(rotation);
   }
 
-  getCurrentFruitHitRadius() {
-    if (!this.currentFruit) return 0;
-    const canvasWidth = Math.max(1, this.game.canvas.getBoundingClientRect().width);
-    const minimumWorldRadius = (MIN_DRAG_HIT_DIAMETER_CSS * GAME_WIDTH / canvasWidth) / 2;
-    const visualRadius = Math.max(
-      this.currentFruit.visual.displayWidth,
-      this.currentFruit.visual.displayHeight,
-    ) / 2;
-    return Math.max(minimumWorldRadius, visualRadius);
-  }
-
-  isPointerOnCurrentFruit(pointer) {
-    if (!this.currentFruit || !Number.isFinite(pointer.worldX) || !Number.isFinite(pointer.worldY)) return false;
-    const dx = pointer.worldX - this.currentFruit.visual.x;
-    const dy = pointer.worldY - this.currentFruit.visual.y;
-    return Math.hypot(dx, dy) <= this.getCurrentFruitHitRadius();
+  isPointerOnReleasedFruit(pointer) {
+    if (!Number.isFinite(pointer.worldX) || !Number.isFinite(pointer.worldY)) return false;
+    for (const fruit of this.fruits.values()) {
+      if (!fruit.physics?.body || fruit.removed) continue;
+      const radius = FRUITS[fruit.level].radius;
+      const dx = pointer.worldX - fruit.physics.x;
+      const dy = pointer.worldY - fruit.physics.y;
+      if (Math.hypot(dx, dy) <= radius) return true;
+    }
+    return false;
   }
 
   beginCurrentFruitDrag(pointer) {
     if (!this.currentFruit || !this.canDrop || this.gameEnded || this.isPaused) return;
-    if (this.controlState !== CONTROL_STATES.WAITING || !this.isPointerOnCurrentFruit(pointer)) return;
+    if (this.controlState !== CONTROL_STATES.WAITING || this.isPointerOnReleasedFruit(pointer)) return;
 
     pointer.event?.preventDefault?.();
     this.controlState = CONTROL_STATES.DRAGGING;
@@ -644,8 +640,13 @@ class FruitScene extends Phaser.Scene {
     this.canDrop = false;
     this.guide.setVisible(false);
     this.activateFruitPhysics(this.currentFruit);
-    this.currentFruit.physics.setVelocity(0, -0.35);
+    this.currentFruit.physics.setVelocity(0, -0.35 * GAMEPLAY.riseSpeedMultiplier);
     this.currentFruit = null;
+    if (!hasCompletedFirstDrop) {
+      hasCompletedFirstDrop = true;
+      ui.controlHint.classList.add('is-hidden');
+      ui.controlHint.setAttribute('aria-hidden', 'true');
+    }
     this.time.delayedCall(GAMEPLAY.spawnDelay, () => this.spawnFruit());
   }
 
@@ -709,6 +710,12 @@ class FruitScene extends Phaser.Scene {
 
     this.score += gainedPoints;
     ui.score.textContent = this.score.toLocaleString('ru-RU');
+    if (this.score > this.bestScore) {
+      this.bestScore = this.score;
+      saveBestScore(this.bestScore);
+      ui.hudBestScore.textContent = this.bestScore.toLocaleString('ru-RU');
+      ui.bestScore.textContent = this.bestScore.toLocaleString('ru-RU');
+    }
     this.addMergeEffects(x, y, effectColor, gainedPoints);
 
     // Две рыбы максимального уровня поглощаются без создания уровня 7.
@@ -833,7 +840,7 @@ class FruitScene extends Phaser.Scene {
     if (buoyancyFactor > 0.01) {
       fruit.physics.applyForce({
         x: 0,
-        y: GAMEPLAY.buoyancyForce * body.mass * buoyancyFactor,
+        y: GAMEPLAY.buoyancyForce * GAMEPLAY.riseSpeedMultiplier * body.mass * buoyancyFactor,
       });
     }
 
@@ -865,8 +872,9 @@ class FruitScene extends Phaser.Scene {
         if (fruit.physics.body.isSleeping) qaSleepingBodies += 1;
       }
 
-      if (fruit.physics.body.velocity.y < -GAMEPLAY.maxRiseSpeed) {
-        fruit.physics.setVelocityY(-GAMEPLAY.maxRiseSpeed);
+      const maximumRiseSpeed = GAMEPLAY.maxRiseSpeed * GAMEPLAY.riseSpeedMultiplier;
+      if (fruit.physics.body.velocity.y < -maximumRiseSpeed) {
+        fruit.physics.setVelocityY(-maximumRiseSpeed);
       }
       if (Math.abs(fruit.physics.body.velocity.x) > 3.2) {
         fruit.physics.setVelocityX(Phaser.Math.Clamp(fruit.physics.body.velocity.x, -3.2, 3.2));
@@ -968,8 +976,12 @@ class FruitScene extends Phaser.Scene {
 
   resetInterface() {
     ui.score.textContent = '0';
+    ui.hudBestScore.textContent = this.bestScore.toLocaleString('ru-RU');
     ui.finalScore.textContent = '0';
     ui.bestScore.textContent = this.bestScore.toLocaleString('ru-RU');
+    ui.pauseButton.setAttribute('aria-label', 'Пауза');
+    ui.controlHint.classList.toggle('is-hidden', hasCompletedFirstDrop);
+    ui.controlHint.setAttribute('aria-hidden', String(hasCompletedFirstDrop));
     ui.warning.classList.remove('is-visible');
     ui.gameWrap.classList.remove('is-danger');
     ui.pauseModal.hidden = true;
