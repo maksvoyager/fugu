@@ -2,6 +2,28 @@ import { FRUITS, STARTING_LEVELS, GAMEPLAY, PROGRESS_UI } from './fruits.js';
 
 const Phaser = window.Phaser;
 
+// ---------- Звуки ----------
+const AUDIO = Object.freeze({
+  enabled: true,
+  masterVolume: 0.75,
+  buttonVolume: 0.35,
+  releaseVolume: 0.40,
+  mergeVolume: 0.55,
+  unlockVolume: 0.65,
+  recordVolume: 0.70,
+  maxMergeVolume: 0.75,
+  gameOverVolume: 0.55,
+  files: Object.freeze({
+    button: Object.freeze({ key: 'sound-button', path: './assets/audio/button.mp3', volume: 'buttonVolume' }),
+    release: Object.freeze({ key: 'sound-release', path: './assets/audio/release.mp3', volume: 'releaseVolume' }),
+    merge: Object.freeze({ key: 'sound-merge', path: './assets/audio/merge.mp3', volume: 'mergeVolume' }),
+    unlock: Object.freeze({ key: 'sound-unlock', path: './assets/audio/unlock.mp3', volume: 'unlockVolume' }),
+    record: Object.freeze({ key: 'sound-record', path: './assets/audio/record.mp3', volume: 'recordVolume' }),
+    maxMerge: Object.freeze({ key: 'sound-max-merge', path: './assets/audio/max_merge.mp3', volume: 'maxMergeVolume' }),
+    gameOver: Object.freeze({ key: 'sound-game-over', path: './assets/audio/game_over.mp3', volume: 'gameOverVolume' }),
+  }),
+});
+
 // ---------- Основная геометрия сцены ----------
 const SCENE_CONFIG = Object.freeze({
   width: 540,
@@ -200,6 +222,7 @@ const SURFACE_Y = SCENE_CONFIG.surfaceY;
 const SEABED_TEXTURE_KEY = 'bottom-seabed';
 const SEABED_TEXTURE_PATH = './assets/backgrounds/bottom_seabed.png';
 const BEST_SCORE_KEY = 'fugu-merge-best-score';
+const SOUND_ENABLED_KEY = 'fugu-merge-sound-enabled';
 const URL_OPTIONS = new URLSearchParams(window.location.search);
 const DEBUG_PHYSICS = URL_OPTIONS.has('debugPhysics');
 const QA_MAX_MERGE = URL_OPTIONS.has('qaMaxMerge');
@@ -207,6 +230,7 @@ const QA_CREATE_MAX_LEVEL = URL_OPTIONS.has('qaCreateMaxLevel');
 const QA_PHYSICS_PILE = URL_OPTIONS.has('qaPhysicsPile');
 const QA_GAME_OVER = URL_OPTIONS.has('qaGameOver');
 const QA_PROGRESSION = URL_OPTIONS.has('qaProgression');
+const QA_AUDIO_EVENTS = URL_OPTIONS.has('qaAudioEvents');
 const QA_NEXT_LEVEL = Number.parseInt(
   URL_OPTIONS.get('qaNextLevel') || '',
   NUMBER_FORMAT_CONFIG.decimalRadix,
@@ -289,6 +313,23 @@ function saveBestScore(value) {
   }
 }
 
+function readSoundEnabled() {
+  try {
+    const savedValue = localStorage.getItem(SOUND_ENABLED_KEY);
+    return savedValue === null ? AUDIO.enabled : savedValue !== 'false';
+  } catch {
+    return AUDIO.enabled;
+  }
+}
+
+function saveSoundEnabled(value) {
+  try {
+    localStorage.setItem(SOUND_ENABLED_KEY, String(value));
+  } catch {
+    // Игра продолжит работать, даже если браузер запретил локальное хранилище.
+  }
+}
+
 class FruitScene extends Phaser.Scene {
   // ======================== Инициализация сцены ========================
 
@@ -316,6 +357,12 @@ class FruitScene extends Phaser.Scene {
     this.lastDragX = GAME_WIDTH / 2;
     this.gameEnded = false;
     this.isPaused = false;
+    this.sounds = null;
+    this.soundEnabled = readSoundEnabled();
+    this.audioUnlocked = false;
+    this.handleAudioUnlock = null;
+    this.recordSoundPlayed = false;
+    this.gameOverSoundPlayed = false;
   }
 
   preload() {
@@ -324,6 +371,7 @@ class FruitScene extends Phaser.Scene {
     // Универсальная закрытая рыба загружается один раз и переиспользуется во всех слотах.
     this.load.image(PROGRESS_UI.lockedTextureKey, PROGRESS_UI.lockedTexturePath);
     this.load.image(SEABED_TEXTURE_KEY, SEABED_TEXTURE_PATH);
+    Object.values(AUDIO.files).forEach(({ key, path }) => this.load.audio(key, path));
   }
 
   create() {
@@ -348,9 +396,14 @@ class FruitScene extends Phaser.Scene {
     this.lastDragX = GAME_WIDTH / 2;
     this.gameEnded = false;
     this.isPaused = false;
+    this.soundEnabled = readSoundEnabled();
+    this.recordSoundPlayed = false;
+    this.gameOverSoundPlayed = false;
 
     this.time.paused = false;
     this.matter.world.resume();
+    this.initializeSounds();
+    this.installAudioUnlock();
     FRUITS.forEach((config) => {
       if (this.textures.exists(config.textureKey)) {
         this.textures.get(config.textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
@@ -384,6 +437,7 @@ class FruitScene extends Phaser.Scene {
       window.removeEventListener('pointercancel', this.handlePointerCancel);
       window.removeEventListener('touchcancel', this.handlePointerCancel);
       window.removeEventListener('blur', this.handleWindowBlur);
+      this.removeAudioUnlockListeners();
     });
     this.createInvisibleBounds();
 
@@ -413,6 +467,78 @@ class FruitScene extends Phaser.Scene {
     if (QA_PHYSICS_PILE) this.setupPhysicsPileQa();
     if (QA_GAME_OVER) this.setupGameOverQa();
     if (QA_PROGRESSION) this.setupProgressionQa();
+  }
+
+  // ======================== Звуки ========================
+
+  initializeSounds() {
+    if (this.sounds) return;
+
+    this.sound.setVolume(AUDIO.masterVolume);
+    this.sounds = Object.fromEntries(
+      Object.entries(AUDIO.files).map(([name, { key, volume }]) => [
+        name,
+        this.cache.audio.exists(key)
+          ? this.sound.add(key, { volume: AUDIO[volume] })
+          : null,
+      ]),
+    );
+  }
+
+  installAudioUnlock() {
+    if (this.audioUnlocked || this.handleAudioUnlock) return;
+    this.handleAudioUnlock = () => this.unlockAudio();
+    window.addEventListener('pointerdown', this.handleAudioUnlock, { once: true, passive: true });
+    window.addEventListener('touchstart', this.handleAudioUnlock, { once: true, passive: true });
+  }
+
+  unlockAudio() {
+    if (this.audioUnlocked) return;
+    this.audioUnlocked = true;
+    this.removeAudioUnlockListeners();
+
+    if (this.sound.locked) this.sound.unlock?.();
+    const resumeResult = this.sound.context?.resume?.();
+    resumeResult?.catch?.(() => {});
+  }
+
+  removeAudioUnlockListeners() {
+    if (!this.handleAudioUnlock) return;
+    window.removeEventListener('pointerdown', this.handleAudioUnlock);
+    window.removeEventListener('touchstart', this.handleAudioUnlock);
+    this.handleAudioUnlock = null;
+  }
+
+  playSound(name) {
+    if (!this.soundEnabled) return false;
+    const sound = this.sounds?.[name];
+    if (!sound) return false;
+    if (QA_AUDIO_EVENTS) {
+      const previousEvents = ui.gameWrap.dataset.qaAudioEvents;
+      ui.gameWrap.dataset.qaAudioEvents = previousEvents ? `${previousEvents},${name}` : name;
+    }
+    return sound.play();
+  }
+
+  setSoundEnabled(value) {
+    this.soundEnabled = Boolean(value);
+    if (!this.soundEnabled) {
+      Object.values(this.sounds || {}).forEach((sound) => sound?.stop());
+    }
+    saveSoundEnabled(this.soundEnabled);
+    return this.soundEnabled;
+  }
+
+  enableSound() {
+    return this.setSoundEnabled(true);
+  }
+
+  disableSound() {
+    return this.setSoundEnabled(false);
+  }
+
+  toggleSound() {
+    return this.setSoundEnabled(!this.soundEnabled);
   }
 
   // ======================== Панель прогрессии ========================
@@ -927,6 +1053,7 @@ class FruitScene extends Phaser.Scene {
       0,
       PHYSICS_CONFIG.releaseVelocityY * GAMEPLAY.riseSpeedMultiplier,
     );
+    this.playSound('release');
     this.currentFruit = null;
     if (!hasCompletedFirstDrop) {
       hasCompletedFirstDrop = true;
@@ -993,16 +1120,23 @@ class FruitScene extends Phaser.Scene {
       : FRUITS[first.level + 1].points;
     const effectColor = isMaxLevelMerge ? FRUITS[first.level].color : FRUITS[first.level + 1].color;
 
+    this.playSound(isMaxLevelMerge ? 'maxMerge' : 'merge');
+
     this.removeFruit(first);
     this.removeFruit(second);
 
     this.score += gainedPoints;
     ui.score.textContent = this.score.toLocaleString('ru-RU');
+    const hasBrokenRecord = !this.recordSoundPlayed && this.score > this.bestScore;
     if (this.score > this.bestScore) {
       this.bestScore = this.score;
       saveBestScore(this.bestScore);
       ui.hudBestScore.textContent = this.bestScore.toLocaleString('ru-RU');
       ui.bestScore.textContent = this.bestScore.toLocaleString('ru-RU');
+    }
+    if (hasBrokenRecord) {
+      this.recordSoundPlayed = true;
+      this.playSound('record');
     }
     this.addMergeEffects(x, y, effectColor, gainedPoints);
 
@@ -1131,6 +1265,7 @@ class FruitScene extends Phaser.Scene {
   unlockLevel(levelIndex) {
     if (this.unlockedLevels.has(levelIndex)) return;
     this.unlockedLevels.add(levelIndex);
+    this.playSound('unlock');
     const slot = ui.progressSlots[levelIndex];
     this.renderProgressSlot(levelIndex, true);
 
@@ -1310,6 +1445,10 @@ class FruitScene extends Phaser.Scene {
   endGame() {
     if (this.gameEnded) return;
     this.gameEnded = true;
+    if (!this.gameOverSoundPlayed) {
+      this.gameOverSoundPlayed = true;
+      this.playSound('gameOver');
+    }
     this.canDrop = false;
     this.controlState = CONTROL_STATES.RELEASED;
     this.activePointerId = null;
@@ -1390,6 +1529,7 @@ function activeScene() {
 
 function restartGame() {
   const scene = activeScene();
+  scene.playSound('button');
   scene.time.paused = false;
   scene.matter.world.resume();
   ui.pauseModal.hidden = true;
@@ -1400,9 +1540,14 @@ function restartGame() {
 ui.pauseButton.addEventListener('click', () => {
   const scene = activeScene();
   if (!scene?.scene.isActive()) return;
+  scene.playSound('button');
   scene.setPaused(!scene.isPaused);
 });
-ui.continueButton.addEventListener('click', () => activeScene().setPaused(false));
+ui.continueButton.addEventListener('click', () => {
+  const scene = activeScene();
+  scene.playSound('button');
+  scene.setPaused(false);
+});
 ui.pauseRestartButton.addEventListener('click', restartGame);
 ui.restartButton.addEventListener('click', restartGame);
 
