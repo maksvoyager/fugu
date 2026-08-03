@@ -2,6 +2,27 @@ import { FRUITS, STARTING_LEVELS, GAMEPLAY, PROGRESS_UI } from './fruits.js';
 
 const Phaser = window.Phaser;
 
+// ---------- Данные подводного атласа ----------
+const FISH_DATA = Object.freeze([
+  Object.freeze({ level: 1, name: 'Пузырик', character: 'Добрый, наивный и любопытный.', description: 'Самый любопытный житель рифа. Верит, что каждый день приносит новое приключение.' }),
+  Object.freeze({ level: 2, name: 'Лучик', character: 'Осторожный мечтатель.', description: 'Сначала внимательно посмотрит, а уже потом решится подплыть поближе.' }),
+  Object.freeze({ level: 3, name: 'Хитрюша', character: 'Самоуверенный наблюдатель.', description: 'Всегда делает вид, что заранее знал, чем всё закончится.' }),
+  Object.freeze({ level: 4, name: 'Спайк', character: 'Суровый, но заботливый защитник.', description: 'Если рядом опасность — первым встанет на защиту всей стаи.' }),
+  Object.freeze({ level: 5, name: 'Шалун', character: 'Весёлый проказник.', description: 'Никогда не упустит возможность поднять настроение соседям.' }),
+  Object.freeze({ level: 6, name: 'Удивляшка', character: 'Вечно чем-то поражён.', description: 'Каждый день для него — настоящее открытие.' }),
+  Object.freeze({ level: 7, name: 'Лео', character: 'Громкий весельчак и душа компании.', description: 'Если слышен весёлый смех — скорее всего, это Лео снова придумал что-то забавное.' }),
+  Object.freeze({ level: 8, name: 'Соня', character: 'Спокойный сонный философ.', description: 'Пока остальные суетятся, Соня спокойно досматривает очередной сон.' }),
+]);
+
+const ATLAS_CONFIG = Object.freeze({
+  storageKey: 'fugu-merge-collection-levels',
+  questionFishPath: './assets/fish/locked_fish.png',
+  lockedName: '???',
+  lockedDescription: 'Создайте предыдущий уровень, чтобы открыть эту рыбу.',
+  unlockDismissDelay: 1500,
+  unlockAutoCloseDelay: 3000,
+});
+
 // ---------- Звуки ----------
 const AUDIO = Object.freeze({
   enabled: true,
@@ -79,7 +100,7 @@ const GAME_OVER_LIMIT_CONFIG = Object.freeze({
   width: 2,
   color: 0xffffff,
   alpha: 0.34,
-  sideInset: 24,
+  sideInset: 0,
   dashLength: 12,
   gapLength: 9,
 });
@@ -314,9 +335,24 @@ const ui = {
   restartButton: document.querySelector('#restart-button'),
   progression: progressionElement,
   progressSlots: [...document.querySelectorAll('.progress-slot')],
+  atlasModal: document.querySelector('#atlas-modal'),
+  atlasGrid: document.querySelector('#atlas-grid'),
+  atlasCloseButton: document.querySelector('#atlas-close-button'),
+  fishDetailModal: document.querySelector('#fish-detail-modal'),
+  fishDetailImage: document.querySelector('#fish-detail-image'),
+  fishDetailLevel: document.querySelector('#fish-detail-level'),
+  fishDetailName: document.querySelector('#fish-detail-name'),
+  fishDetailCharacter: document.querySelector('#fish-detail-character'),
+  fishDetailDescription: document.querySelector('#fish-detail-description'),
+  fishDetailCloseButton: document.querySelector('#fish-detail-close-button'),
+  fishUnlockModal: document.querySelector('#fish-unlock-modal'),
+  fishUnlockImage: document.querySelector('#fish-unlock-image'),
+  fishUnlockName: document.querySelector('#fish-unlock-name'),
+  fishUnlockDescription: document.querySelector('#fish-unlock-description'),
 };
 
 const warnedProgressAssets = new Set();
+const warnedAtlasAssets = new Set();
 // Флаг живёт до перезагрузки страницы и не сбрасывается при рестарте Phaser-сцены.
 let hasCompletedFirstDrop = false;
 
@@ -370,6 +406,29 @@ function saveAmbientEnabled(value) {
   }
 }
 
+function readCollectionLevels() {
+  try {
+    const savedLevels = JSON.parse(localStorage.getItem(ATLAS_CONFIG.storageKey) || '[]');
+    const validLevels = Array.isArray(savedLevels)
+      ? savedLevels.filter((level) => Number.isInteger(level) && level >= 1 && level <= FISH_DATA.length)
+      : [];
+    return new Set([0, ...validLevels.map((level) => level - 1)]);
+  } catch {
+    return new Set([0]);
+  }
+}
+
+function saveCollectionLevels(levelIndexes) {
+  try {
+    const savedLevels = [...levelIndexes]
+      .sort((firstLevel, secondLevel) => firstLevel - secondLevel)
+      .map((levelIndex) => levelIndex + 1);
+    localStorage.setItem(ATLAS_CONFIG.storageKey, JSON.stringify(savedLevels));
+  } catch {
+    // Игра и атлас продолжат работать, даже если браузер запретил localStorage.
+  }
+}
+
 class FruitScene extends Phaser.Scene {
   // ======================== Инициализация сцены ========================
 
@@ -386,6 +445,12 @@ class FruitScene extends Phaser.Scene {
     this.gameOverDebugGraphics = null;
     this.gameOverDebugLabel = null;
     this.unlockedLevels = new Set([0]);
+    this.collectionUnlockedLevels = readCollectionLevels();
+    saveCollectionLevels(this.collectionUnlockedLevels);
+    this.atlasWasRunning = false;
+    this.unlockDismissTimer = 0;
+    this.unlockAutoCloseTimer = 0;
+    this.unlockCanDismissAt = 0;
     this.score = 0;
     this.bestScore = 0;
     this.currentFruit = null;
@@ -443,6 +508,13 @@ class FruitScene extends Phaser.Scene {
     this.gameOverDebugGraphics = null;
     this.gameOverDebugLabel = null;
     this.unlockedLevels = new Set([0]);
+    this.collectionUnlockedLevels = readCollectionLevels();
+    this.atlasWasRunning = false;
+    window.clearTimeout(this.unlockDismissTimer);
+    window.clearTimeout(this.unlockAutoCloseTimer);
+    this.unlockDismissTimer = 0;
+    this.unlockAutoCloseTimer = 0;
+    this.unlockCanDismissAt = 0;
     this.score = 0;
     this.bestScore = readBestScore();
     this.currentFruit = null;
@@ -504,6 +576,8 @@ class FruitScene extends Phaser.Scene {
       }
       this.load.off('loaderror', this.handleAssetLoadError);
       this.stopAmbientTween();
+      window.clearTimeout(this.unlockDismissTimer);
+      window.clearTimeout(this.unlockAutoCloseTimer);
     });
     this.createInvisibleBounds();
 
@@ -926,6 +1000,153 @@ class FruitScene extends Phaser.Scene {
   renderProgression() {
     ui.progression.style.setProperty('--progress-fish-size', `${PROGRESS_UI.progressFishSize}px`);
     ui.progressSlots.forEach((_, index) => this.renderProgressSlot(index));
+  }
+
+  // ======================== Подводный атлас ========================
+
+  configureAtlasImage(image, primaryPath, fallbackPath, alt) {
+    image.hidden = false;
+    image.dataset.usedFallback = 'false';
+    image.alt = alt;
+    image.draggable = false;
+    image.onerror = () => {
+      if (image.dataset.usedFallback === 'true') {
+        image.hidden = true;
+        return;
+      }
+      image.dataset.usedFallback = 'true';
+      image.src = fallbackPath;
+      if (!warnedAtlasAssets.has(primaryPath)) {
+        warnedAtlasAssets.add(primaryPath);
+        console.warn(`[Подводный атлас] Не удалось загрузить ${primaryPath}. Используется запасное изображение.`);
+      }
+    };
+    image.src = primaryPath;
+  }
+
+  renderAtlas() {
+    ui.atlasGrid.replaceChildren();
+
+    FISH_DATA.forEach((fishData, levelIndex) => {
+      const isUnlocked = this.collectionUnlockedLevels.has(levelIndex);
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = `atlas-fish-card${isUnlocked ? ' is-unlocked' : ' is-locked'}`;
+      card.disabled = !isUnlocked;
+      card.dataset.level = String(fishData.level);
+      card.style.setProperty('--atlas-index', String(levelIndex));
+      card.setAttribute(
+        'aria-label',
+        isUnlocked ? `${fishData.name}, уровень ${fishData.level}` : `Закрытая рыба уровня ${fishData.level}`,
+      );
+
+      const imageWrap = document.createElement('span');
+      imageWrap.className = 'atlas-fish-image-wrap';
+      const image = document.createElement('img');
+      image.className = 'atlas-fish-image';
+      const imagePath = isUnlocked ? FRUITS[levelIndex].texturePath : ATLAS_CONFIG.questionFishPath;
+      this.configureAtlasImage(
+        image,
+        imagePath,
+        ATLAS_CONFIG.questionFishPath,
+        isUnlocked ? fishData.name : 'Неоткрытая рыба',
+      );
+      imageWrap.appendChild(image);
+
+      const name = document.createElement('strong');
+      name.textContent = isUnlocked ? fishData.name : ATLAS_CONFIG.lockedName;
+      const description = document.createElement('span');
+      description.className = 'atlas-fish-description';
+      description.textContent = isUnlocked ? fishData.description : ATLAS_CONFIG.lockedDescription;
+
+      card.append(imageWrap, name, description);
+      if (isUnlocked) card.addEventListener('click', () => this.openFishDetail(levelIndex));
+      ui.atlasGrid.appendChild(card);
+    });
+  }
+
+  openAtlas() {
+    if (!ui.atlasModal.hidden) return;
+    this.playSound('button');
+    this.cancelCurrentFruitDrag();
+    this.atlasWasRunning = !this.isPaused && !this.gameEnded;
+    if (this.atlasWasRunning) {
+      this.matter.world.pause();
+      this.time.paused = true;
+    }
+    this.renderAtlas();
+    ui.atlasModal.hidden = false;
+  }
+
+  closeAtlas() {
+    if (ui.atlasModal.hidden) return;
+    this.playSound('button');
+    ui.fishDetailModal.hidden = true;
+    ui.atlasModal.hidden = true;
+    if (this.atlasWasRunning && !this.isPaused && !this.gameEnded) {
+      this.time.paused = false;
+      this.matter.world.resume();
+      if (this.currentFruit?.isHeld) this.positionCurrentFruit(this.lastDragX);
+    }
+    this.atlasWasRunning = false;
+  }
+
+  openFishDetail(levelIndex) {
+    const fishData = FISH_DATA[levelIndex];
+    if (!fishData || !this.collectionUnlockedLevels.has(levelIndex)) return;
+    this.playSound('button');
+    this.configureAtlasImage(
+      ui.fishDetailImage,
+      FRUITS[levelIndex].texturePath,
+      ATLAS_CONFIG.questionFishPath,
+      fishData.name,
+    );
+    ui.fishDetailLevel.textContent = `УРОВЕНЬ ${fishData.level}`;
+    ui.fishDetailName.textContent = fishData.name;
+    ui.fishDetailCharacter.textContent = fishData.character;
+    ui.fishDetailDescription.textContent = fishData.description;
+    ui.fishDetailModal.hidden = false;
+  }
+
+  closeFishDetail() {
+    if (ui.fishDetailModal.hidden) return;
+    this.playSound('button');
+    ui.fishDetailModal.hidden = true;
+  }
+
+  showFishUnlock(levelIndex) {
+    const fishData = FISH_DATA[levelIndex];
+    if (!fishData) return;
+
+    window.clearTimeout(this.unlockDismissTimer);
+    window.clearTimeout(this.unlockAutoCloseTimer);
+    this.configureAtlasImage(
+      ui.fishUnlockImage,
+      FRUITS[levelIndex].texturePath,
+      ATLAS_CONFIG.questionFishPath,
+      fishData.name,
+    );
+    ui.fishUnlockName.textContent = fishData.name;
+    ui.fishUnlockDescription.textContent = fishData.description;
+    ui.fishUnlockModal.classList.remove('can-dismiss');
+    ui.fishUnlockModal.hidden = false;
+    this.unlockCanDismissAt = performance.now() + ATLAS_CONFIG.unlockDismissDelay;
+    this.unlockDismissTimer = window.setTimeout(() => {
+      ui.fishUnlockModal.classList.add('can-dismiss');
+    }, ATLAS_CONFIG.unlockDismissDelay);
+    this.unlockAutoCloseTimer = window.setTimeout(
+      () => this.closeFishUnlock(true),
+      ATLAS_CONFIG.unlockAutoCloseDelay,
+    );
+  }
+
+  closeFishUnlock(force = false) {
+    if (ui.fishUnlockModal.hidden) return;
+    if (!force && performance.now() < this.unlockCanDismissAt) return;
+    window.clearTimeout(this.unlockDismissTimer);
+    window.clearTimeout(this.unlockAutoCloseTimer);
+    ui.fishUnlockModal.hidden = true;
+    ui.fishUnlockModal.classList.remove('can-dismiss');
   }
 
   // ======================== Служебные QA-сценарии ========================
@@ -1573,6 +1794,11 @@ class FruitScene extends Phaser.Scene {
   unlockLevel(levelIndex) {
     if (this.unlockedLevels.has(levelIndex)) return;
     this.unlockedLevels.add(levelIndex);
+    const isNewCollectionLevel = !this.collectionUnlockedLevels.has(levelIndex);
+    if (isNewCollectionLevel) {
+      this.collectionUnlockedLevels.add(levelIndex);
+      saveCollectionLevels(this.collectionUnlockedLevels);
+    }
     this.playSound('unlock');
     const slot = ui.progressSlots[levelIndex];
     this.renderProgressSlot(levelIndex, true);
@@ -1589,6 +1815,8 @@ class FruitScene extends Phaser.Scene {
       slot.appendChild(bubble);
       window.setTimeout(() => bubble.remove(), EFFECTS_CONFIG.unlockBubbleDuration);
     }
+
+    if (isNewCollectionLevel) this.showFishUnlock(levelIndex);
   }
 
   // ======================== Физика и игровой цикл ========================
@@ -1790,6 +2018,10 @@ class FruitScene extends Phaser.Scene {
     ui.gameWrap.classList.remove('is-danger');
     ui.pauseModal.hidden = true;
     ui.gameOver.hidden = true;
+    ui.atlasModal.hidden = true;
+    ui.fishDetailModal.hidden = true;
+    ui.fishUnlockModal.hidden = true;
+    ui.fishUnlockModal.classList.remove('can-dismiss');
     this.updateSoundToggleInterface();
     this.updateAmbientToggleInterface();
     this.renderProgression();
@@ -1874,6 +2106,26 @@ ui.ambientToggleButton.addEventListener('click', () => {
 });
 ui.pauseRestartButton.addEventListener('click', restartGame);
 ui.restartButton.addEventListener('click', restartGame);
+
+ui.progression.addEventListener('click', (event) => {
+  if (!event.target.closest('.progress-slot')) return;
+  activeScene().openAtlas();
+});
+ui.atlasCloseButton.addEventListener('click', () => activeScene().closeAtlas());
+ui.atlasModal.addEventListener('click', (event) => {
+  if (event.target === ui.atlasModal) activeScene().closeAtlas();
+});
+ui.fishDetailCloseButton.addEventListener('click', () => activeScene().closeFishDetail());
+ui.fishDetailModal.addEventListener('click', (event) => {
+  if (event.target === ui.fishDetailModal) activeScene().closeFishDetail();
+});
+ui.fishUnlockModal.addEventListener('click', () => activeScene().closeFishUnlock());
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  const scene = activeScene();
+  if (!ui.fishDetailModal.hidden) scene.closeFishDetail();
+  else if (!ui.atlasModal.hidden) scene.closeAtlas();
+});
 
 // Небольшой публичный объект помогает проверять состояние прототипа в консоли.
 window.fuguGame = game;

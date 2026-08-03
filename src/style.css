@@ -499,6 +499,195 @@ button { font: inherit; }
 .results div { padding: 11px 8px; border: 1px solid rgba(255,255,255,.28); border-radius: 22px; background: rgba(255,255,255,.1); }
 .results strong { display: block; font-size: var(--modal-result-font-size); line-height: 1.1; text-shadow: 0 2px 6px rgba(0,62,117,.3); }
 
+/* ---------- Подводный атлас ---------- */
+.atlas-modal {
+  z-index: 60;
+  padding:
+    max(10px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  background: rgba(0, 34, 78, .55);
+  animation: atlas-overlay-in var(--modal-animation-duration) ease-out;
+}
+.atlas-card {
+  position: relative;
+  width: min(100%, 480px);
+  max-height: 100%;
+  padding: 18px 14px 14px;
+  overflow: auto;
+  border-radius: 34px 38px 32px 40px;
+  text-align: center;
+  scrollbar-width: none;
+}
+.atlas-card::-webkit-scrollbar { display: none; }
+.atlas-card .modal-kicker { display: block; padding: 0 38px; }
+.atlas-card h2 { margin: 3px 0 12px; font-size: clamp(21px, 7vw, 30px); }
+.modal-close-button {
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0 0 3px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+.atlas-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(108px, 1fr);
+  gap: 7px;
+}
+.atlas-fish-card {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 108px;
+  padding: 8px 8px 8px;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 24px 21px 25px 20px;
+  background:
+    radial-gradient(circle at 20% 8%, rgba(255,255,255,.42), transparent 28%),
+    linear-gradient(145deg, rgba(220,249,255,.22), rgba(52,145,207,.18));
+  box-shadow: inset 0 2px 3px rgba(255,255,255,.34), inset 0 -10px 18px rgba(0,73,145,.13);
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 2px 5px rgba(0,49,103,.42);
+  animation: atlas-card-in .34s backwards cubic-bezier(.2,.85,.25,1.18);
+  animation-delay: calc(var(--atlas-index, 0) * 35ms);
+  transition: transform .16s ease, filter .16s ease, border-color .16s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.atlas-fish-card.is-unlocked { cursor: pointer; }
+.atlas-fish-card.is-locked { opacity: .78; }
+.atlas-fish-card:active:not(:disabled) { transform: scale(.96); }
+.atlas-fish-image-wrap {
+  display: grid;
+  width: min(58px, 17vw);
+  height: min(48px, 14vw);
+  place-items: center;
+  overflow: visible;
+}
+.atlas-fish-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 5px rgba(0,45,91,.34));
+  pointer-events: none;
+}
+.atlas-fish-card strong {
+  display: block;
+  font-size: clamp(11px, 3.7vw, 15px);
+  font-weight: 900;
+  line-height: 1.05;
+}
+.atlas-fish-description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(255,255,255,.83);
+  font-size: clamp(7px, 2.15vw, 10px);
+  font-weight: 700;
+  line-height: 1.14;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+/* ---------- Увеличенная карточка рыбы ---------- */
+.fish-detail-modal { z-index: 70; background: rgba(0,30,70,.6); }
+.fish-detail-card {
+  width: min(100%, 370px);
+  padding: 24px 24px 22px;
+  border-radius: 46px 40px 48px 42px;
+  text-align: center;
+}
+.fish-detail-image {
+  display: block;
+  width: min(230px, 70vw);
+  height: min(190px, 32vh);
+  margin: -6px auto 6px;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 14px rgba(0,49,99,.35));
+}
+.fish-detail-card h2 { margin-bottom: 12px; }
+.fish-detail-character {
+  margin: 0 0 7px;
+  font-size: 14px;
+  font-weight: 900;
+}
+.fish-detail-description {
+  margin: 0 0 18px;
+  color: rgba(255,255,255,.85);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+/* ---------- Первое открытие новой рыбы ---------- */
+.fish-unlock-modal {
+  z-index: 80;
+  background: rgba(0,32,74,.48);
+  animation: atlas-overlay-in .28s ease-out;
+}
+.fish-unlock-card {
+  width: min(100%, 370px);
+  padding: 24px 24px 20px;
+  border-radius: 50px 42px 48px 45px;
+  text-align: center;
+  animation: fish-unlock-in .55s cubic-bezier(.15,.85,.2,1.18);
+}
+.fish-unlock-kicker {
+  display: block;
+  font-size: clamp(17px, 5vw, 23px);
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-shadow: 0 0 18px rgba(207,249,255,.95), 0 3px 8px rgba(0,54,105,.35);
+}
+.fish-unlock-image {
+  display: block;
+  width: min(250px, 72vw);
+  height: min(210px, 35vh);
+  margin: 2px auto -4px;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 18px rgba(0,52,100,.36));
+  animation: fish-unlock-float 1.8s ease-in-out infinite alternate;
+}
+.fish-unlock-card h2 { margin: 0 0 8px; }
+.fish-unlock-card p {
+  margin: 0;
+  color: rgba(255,255,255,.86);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.fish-unlock-hint {
+  display: block;
+  margin-top: 15px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  opacity: 0;
+  transition: opacity .25s;
+}
+.fish-unlock-modal.can-dismiss { cursor: pointer; }
+.fish-unlock-modal.can-dismiss .fish-unlock-hint { opacity: .68; }
+
+@media (hover: hover) and (pointer: fine) {
+  .atlas-fish-card.is-unlocked:hover { transform: scale(1.035); filter: brightness(1.1); border-color: rgba(255,255,255,.72); }
+}
+
 @keyframes rays { to { transform: skewX(3deg) scaleX(1.05); opacity: .76; } }
 @keyframes drift-up { from { transform: translateY(40px); opacity: 0; } 20% { opacity: .7; } to { transform: translate(10px, -280px); opacity: 0; } }
 @keyframes button-bounce { 0% { transform: scale(1); } 40% { transform: scale(.86); } 75% { transform: scale(1.08); } 100% { transform: scale(1); } }
@@ -507,6 +696,10 @@ button { font: inherit; }
 @keyframes unlock-bubble { to { opacity: 0; transform: translate(var(--bubble-x), -34px) scale(.3); } }
 @keyframes danger-pulse { to { opacity: .55; filter: brightness(1.18); } }
 @keyframes modal-in { from { opacity: 0; transform: scale(.83) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes atlas-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes atlas-card-in { from { opacity: 0; transform: scale(.86); } to { opacity: 1; transform: scale(1); } }
+@keyframes fish-unlock-in { from { opacity: 0; transform: scale(.62) translateY(18px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes fish-unlock-float { to { transform: translateY(-7px) rotate(1.2deg); } }
 
 @media (max-width: 370px) {
   :root {
