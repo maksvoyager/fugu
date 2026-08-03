@@ -95,14 +95,11 @@ const BACKDROP_CONFIG = Object.freeze({
   seabedDepth: 0.5,
   seabedOriginX: 0.5,
   seabedOriginY: 1,
-  surfaceLineWidth: 5,
-  surfaceLineColor: 0xe8fdff,
-  surfaceLineAlpha: 0.92,
-  surfaceStep: 15,
-  surfaceWaveFrequency: 0.055,
-  surfaceWaveAmplitude: 5,
-  surfaceRippleFrequency: 0.12,
-  surfaceRippleAmplitude: 2,
+  surfaceDepth: 1,
+  surfaceOriginX: 0.5,
+  surfaceOriginY: 0.86,
+  surfaceTopY: 0,
+  surfaceAlpha: 0.82,
   bubbleLineWidth: 2,
   bubbleColor: 0xffffff,
   bubbleAlpha: 0.22,
@@ -221,6 +218,8 @@ const WALL_SIZE = SCENE_CONFIG.wallSize;
 const SURFACE_Y = SCENE_CONFIG.surfaceY;
 const SEABED_TEXTURE_KEY = 'bottom-seabed';
 const SEABED_TEXTURE_PATH = './assets/backgrounds/bottom_seabed.png';
+const WATER_SURFACE_TEXTURE_KEY = 'water-surface';
+const WATER_SURFACE_TEXTURE_PATH = './assets/backgrounds/water_surface.png';
 const BEST_SCORE_KEY = 'fugu-merge-best-score';
 const SOUND_ENABLED_KEY = 'fugu-merge-sound-enabled';
 const URL_OPTIONS = new URLSearchParams(window.location.search);
@@ -382,6 +381,7 @@ class FruitScene extends Phaser.Scene {
     // Универсальная закрытая рыба загружается один раз и переиспользуется во всех слотах.
     this.load.image(PROGRESS_UI.lockedTextureKey, PROGRESS_UI.lockedTexturePath);
     this.load.image(SEABED_TEXTURE_KEY, SEABED_TEXTURE_PATH);
+    this.load.image(WATER_SURFACE_TEXTURE_KEY, WATER_SURFACE_TEXTURE_PATH);
     Object.values(AUDIO.files).forEach(({ key, path }) => this.load.audio(key, path));
   }
 
@@ -813,20 +813,19 @@ class FruitScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
     const graphics = this.add.graphics().setDepth(BACKDROP_CONFIG.backgroundDepth);
 
-    // Мягкая светлая поверхность воды. Это только декор, коллайдер расположен отдельно.
-    graphics.lineStyle(
-      BACKDROP_CONFIG.surfaceLineWidth,
-      BACKDROP_CONFIG.surfaceLineColor,
-      BACKDROP_CONFIG.surfaceLineAlpha,
-    );
-    graphics.beginPath();
-    graphics.moveTo(0, SURFACE_Y);
-    for (let x = 0; x <= GAME_WIDTH; x += BACKDROP_CONFIG.surfaceStep) {
-      const waveY = Math.sin(x * BACKDROP_CONFIG.surfaceWaveFrequency) * BACKDROP_CONFIG.surfaceWaveAmplitude;
-      const rippleY = Math.sin(x * BACKDROP_CONFIG.surfaceRippleFrequency) * BACKDROP_CONFIG.surfaceRippleAmplitude;
-      graphics.lineTo(x, SURFACE_Y + waveY + rippleY);
+    // Изображение поверхности — только декор; физический коллайдер остаётся отдельным и невидимым.
+    if (this.textures.exists(WATER_SURFACE_TEXTURE_KEY)) {
+      this.textures.get(WATER_SURFACE_TEXTURE_KEY).setFilter(Phaser.Textures.FilterMode.LINEAR);
+      const waterSurface = this.add
+        .image(GAME_WIDTH / 2, SURFACE_Y, WATER_SURFACE_TEXTURE_KEY)
+        .setOrigin(BACKDROP_CONFIG.surfaceOriginX, BACKDROP_CONFIG.surfaceOriginY)
+        .setAlpha(BACKDROP_CONFIG.surfaceAlpha)
+        .setDepth(BACKDROP_CONFIG.surfaceDepth);
+      const widthScale = GAME_WIDTH / waterSurface.width;
+      const topCoverageScale = (SURFACE_Y - BACKDROP_CONFIG.surfaceTopY)
+        / (waterSurface.height * BACKDROP_CONFIG.surfaceOriginY);
+      waterSurface.setScale(Math.max(widthScale, topCoverageScale));
     }
-    graphics.strokePath();
 
     graphics.lineStyle(BACKDROP_CONFIG.bubbleLineWidth, BACKDROP_CONFIG.bubbleColor, BACKDROP_CONFIG.bubbleAlpha);
     BACKDROP_CONFIG.decorativeBubbles.forEach(([bubbleX, bubbleY, bubbleRadius]) => {
