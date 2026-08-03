@@ -360,12 +360,23 @@ class FruitScene extends Phaser.Scene {
     this.sounds = null;
     this.soundEnabled = readSoundEnabled();
     this.audioUnlocked = false;
+    this.audioUnlockPromise = null;
     this.handleAudioUnlock = null;
+    this.handleSoundManagerUnlocked = null;
+    this.handleAudioVisibilityChange = null;
+    this.handleAudioPageShow = null;
+    this.hasWarnedSuspendedAudio = false;
+    this.handleAssetLoadError = (file) => {
+      console.warn('[Audio] Failed to load asset:', file.key, file.src);
+    };
     this.recordSoundPlayed = false;
     this.gameOverSoundPlayed = false;
   }
 
   preload() {
+    this.load.off('loaderror', this.handleAssetLoadError);
+    this.load.on('loaderror', this.handleAssetLoadError);
+
     // Все изображения из единой конфигурации загружаются заранее; при ошибке используется fallback-круг.
     FRUITS.forEach((config) => this.load.image(config.textureKey, config.texturePath));
     // Универсальная закрытая рыба загружается один раз и переиспользуется во всех слотах.
@@ -438,6 +449,12 @@ class FruitScene extends Phaser.Scene {
       window.removeEventListener('touchcancel', this.handlePointerCancel);
       window.removeEventListener('blur', this.handleWindowBlur);
       this.removeAudioUnlockListeners();
+      document.removeEventListener('visibilitychange', this.handleAudioVisibilityChange);
+      window.removeEventListener('pageshow', this.handleAudioPageShow);
+      if (this.handleSoundManagerUnlocked) {
+        this.sound.off('unlocked', this.handleSoundManagerUnlocked);
+      }
+      this.load.off('loaderror', this.handleAssetLoadError);
     });
     this.createInvisibleBounds();
 
@@ -472,40 +489,119 @@ class FruitScene extends Phaser.Scene {
   // ======================== Звуки ========================
 
   initializeSounds() {
-    if (this.sounds) return;
+    if (!this.sounds) {
+      this.sound.setVolume(AUDIO.masterVolume);
+      this.sounds = Object.fromEntries(
+        Object.entries(AUDIO.files).map(([name, { key, volume }]) => [
+          name,
+          this.cache.audio.exists(key)
+            ? this.sound.add(key, { volume: AUDIO[volume] })
+            : null,
+        ]),
+      );
+    }
 
-    this.sound.setVolume(AUDIO.masterVolume);
-    this.sounds = Object.fromEntries(
-      Object.entries(AUDIO.files).map(([name, { key, volume }]) => [
-        name,
-        this.cache.audio.exists(key)
-          ? this.sound.add(key, { volume: AUDIO[volume] })
-          : null,
-      ]),
-    );
+    if (this.handleSoundManagerUnlocked) {
+      this.sound.off('unlocked', this.handleSoundManagerUnlocked);
+    }
+    this.handleSoundManagerUnlocked = () => {
+      const context = this.sound?.context;
+      if (context && context.state !== 'running') return;
+      this.markAudioUnlocked('Phaser Sound Manager unlocked');
+    };
+    this.sound.once('unlocked', this.handleSoundManagerUnlocked);
   }
 
   installAudioUnlock() {
+    if (!this.handleAudioVisibilityChange) {
+      this.handleAudioVisibilityChange = () => this.refreshAudioContextState();
+    }
+    if (!this.handleAudioPageShow) {
+      this.handleAudioPageShow = () => this.refreshAudioContextState(true);
+    }
+    document.removeEventListener('visibilitychange', this.handleAudioVisibilityChange);
+    window.removeEventListener('pageshow', this.handleAudioPageShow);
+    document.addEventListener('visibilitychange', this.handleAudioVisibilityChange);
+    window.addEventListener('pageshow', this.handleAudioPageShow);
+
     if (this.audioUnlocked || this.handleAudioUnlock) return;
-    this.handleAudioUnlock = () => this.unlockAudio();
-    window.addEventListener('pointerdown', this.handleAudioUnlock, { once: true, passive: true });
-    window.addEventListener('touchstart', this.handleAudioUnlock, { once: true, passive: true });
+    this.handleAudioUnlock = () => {
+      // Вызов resume начинается синхронно внутри пользовательского жеста — это важно для iOS Safari.
+      void this.unlockAudio();
+    };
+    window.addEventListener('pointerdown', this.handleAudioUnlock, { capture: true, passive: true });
+    window.addEventListener('touchstart', this.handleAudioUnlock, { capture: true, passive: true });
+    window.addEventListener('click', this.handleAudioUnlock, { capture: true, passive: true });
+
   }
 
-  unlockAudio() {
+  async unlockAudio() {
+    if (this.audioUnlocked) return true;
+    if (this.audioUnlockPromise) return this.audioUnlockPromise;
+
+    const context = this.sound?.context;
+    const unlockPromise = (async () => {
+      try {
+        if (this.sound?.locked) this.sound.unlock?.();
+        if (context && context.state !== 'running') await context.resume?.();
+
+        const unlocked = !context || context.state === 'running';
+        if (unlocked) {
+          this.markAudioUnlocked('Audio unlocked');
+        } else {
+          this.audioUnlocked = false;
+          console.warn('[Audio] Unlock failed: AudioContext state is', context.state);
+        }
+        return unlocked;
+      } catch (error) {
+        this.audioUnlocked = false;
+        console.warn('[Audio] Unlock failed:', error);
+        return false;
+      }
+    })();
+    this.audioUnlockPromise = unlockPromise;
+
+    try {
+      return await unlockPromise;
+    } finally {
+      if (this.audioUnlockPromise === unlockPromise) this.audioUnlockPromise = null;
+    }
+  }
+
+  markAudioUnlocked(message) {
     if (this.audioUnlocked) return;
     this.audioUnlocked = true;
+    this.hasWarnedSuspendedAudio = false;
     this.removeAudioUnlockListeners();
+    if (QA_AUDIO_EVENTS) {
+      ui.gameWrap.dataset.qaAudioUnlocked = 'true';
+      ui.gameWrap.dataset.qaAudioContextState = this.sound?.context?.state || 'html5-audio';
+    }
+    console.info(`[Audio] ${message}`);
+  }
 
-    if (this.sound.locked) this.sound.unlock?.();
-    const resumeResult = this.sound.context?.resume?.();
-    resumeResult?.catch?.(() => {});
+  refreshAudioContextState(forceGestureCheck = false) {
+    const context = this.sound?.context;
+    if (!context) {
+      this.audioUnlocked = true;
+      return;
+    }
+
+    if (context.state !== 'running' || forceGestureCheck) {
+      this.audioUnlocked = false;
+      if (QA_AUDIO_EVENTS) {
+        ui.gameWrap.dataset.qaAudioUnlocked = 'false';
+        ui.gameWrap.dataset.qaAudioContextState = context.state;
+      }
+      this.installAudioUnlock();
+    }
   }
 
   removeAudioUnlockListeners() {
     if (!this.handleAudioUnlock) return;
-    window.removeEventListener('pointerdown', this.handleAudioUnlock);
-    window.removeEventListener('touchstart', this.handleAudioUnlock);
+    window.removeEventListener('pointerdown', this.handleAudioUnlock, true);
+    window.removeEventListener('touchstart', this.handleAudioUnlock, true);
+    window.removeEventListener('click', this.handleAudioUnlock, true);
     this.handleAudioUnlock = null;
   }
 
@@ -513,6 +609,25 @@ class FruitScene extends Phaser.Scene {
     if (!this.soundEnabled) return false;
     const sound = this.sounds?.[name];
     if (!sound) return false;
+    if (this.sound?.mute) return false;
+
+    const context = this.sound?.context;
+    if (context && context.state !== 'running') {
+      if (this.audioUnlockPromise) {
+        void this.audioUnlockPromise.then((unlocked) => {
+          if (unlocked) this.playSound(name);
+        });
+        return false;
+      }
+
+      this.audioUnlocked = false;
+      this.installAudioUnlock();
+      if (!this.hasWarnedSuspendedAudio) {
+        this.hasWarnedSuspendedAudio = true;
+        console.warn('[Audio] Sound skipped: AudioContext is', context.state);
+      }
+      return false;
+    }
     if (QA_AUDIO_EVENTS) {
       const previousEvents = ui.gameWrap.dataset.qaAudioEvents;
       ui.gameWrap.dataset.qaAudioEvents = previousEvents ? `${previousEvents},${name}` : name;
