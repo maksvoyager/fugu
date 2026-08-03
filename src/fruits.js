@@ -41,6 +41,4 @@ export const GAMEPLAY = {
   dangerDelay: 2600,
   dangerStabilizationDelay: 850,
   dangerStableSpeed: 0.65,
-  gameOverSeabedRatio: 0.5,
-  gameOverFallbackRatio: 0.825,
 };

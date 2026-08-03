@@ -38,7 +38,8 @@ const SCENE_CONFIG = Object.freeze({
   desktopHeight: 960,
   mobileBreakpoint: 600,
   minimumMobileHeight: 760,
-  spawnBottomOffset: 200,
+  spawnBottomOffset: 160,
+  gameOverOffsetAboveSpawn: 24,
   wallSize: 28,
   surfaceY: 104,
   maximumStartingLevelCount: 3,
@@ -70,6 +71,17 @@ const GUIDE_CONFIG = Object.freeze({
   alpha: 0.22,
   surfaceOffset: 26,
   depth: 1,
+});
+
+// ---------- Видимая граница зоны проигрыша ----------
+const GAME_OVER_LIMIT_CONFIG = Object.freeze({
+  depth: 3,
+  width: 2,
+  color: 0xffffff,
+  alpha: 0.34,
+  sideInset: 24,
+  dashLength: 12,
+  gapLength: 9,
 });
 
 // ---------- Визуальные параметры рыб ----------
@@ -305,7 +317,6 @@ const ui = {
 };
 
 const warnedProgressAssets = new Set();
-let warnedMissingSeabedForGameOver = false;
 // Флаг живёт до перезагрузки страницы и не сбрасывается при рестарте Phaser-сцены.
 let hasCompletedFirstDrop = false;
 
@@ -370,7 +381,8 @@ class FruitScene extends Phaser.Scene {
     this.pendingMerges = [];
     this.boundBodies = [];
     this.seabed = null;
-    this.gameOverLineY = gameHeight * GAMEPLAY.gameOverFallbackRatio;
+    this.gameOverLineY = spawnY() - SCENE_CONFIG.gameOverOffsetAboveSpawn;
+    this.gameOverLimitGraphics = null;
     this.gameOverDebugGraphics = null;
     this.gameOverDebugLabel = null;
     this.unlockedLevels = new Set([0]);
@@ -426,7 +438,8 @@ class FruitScene extends Phaser.Scene {
     this.pendingMerges = [];
     this.boundBodies = [];
     this.seabed = null;
-    this.gameOverLineY = gameHeight * GAMEPLAY.gameOverFallbackRatio;
+    this.gameOverLineY = spawnY() - SCENE_CONFIG.gameOverOffsetAboveSpawn;
+    this.gameOverLimitGraphics = null;
     this.gameOverDebugGraphics = null;
     this.gameOverDebugLabel = null;
     this.unlockedLevels = new Set([0]);
@@ -1010,24 +1023,39 @@ class FruitScene extends Phaser.Scene {
 
     // Graphics создаётся один раз; дальше линия только перерисовывается и меняет видимость.
     this.guide = this.add.graphics().setDepth(GUIDE_CONFIG.depth).setVisible(false);
+    this.gameOverLimitGraphics = this.add.graphics().setDepth(GAME_OVER_LIMIT_CONFIG.depth);
     this.recalculateGameOverLine();
     this.createGameOverDebugLine();
   }
 
   recalculateGameOverLine() {
-    if (this.seabed?.active && this.seabed.displayHeight > 0) {
-      const seabedDisplayHeight = this.seabed.displayHeight;
-      const seabedTopY = this.seabed.y - seabedDisplayHeight * this.seabed.originY;
-      this.gameOverLineY = seabedTopY + seabedDisplayHeight * GAMEPLAY.gameOverSeabedRatio;
-    } else {
-      this.gameOverLineY = gameHeight * GAMEPLAY.gameOverFallbackRatio;
-      if (!warnedMissingSeabedForGameOver) {
-        warnedMissingSeabedForGameOver = true;
-        console.warn('[Game Over] Изображение морского дна недоступно. Используется резервная граница на 82,5% высоты поля.');
-      }
-    }
-
+    this.gameOverLineY = spawnY() - SCENE_CONFIG.gameOverOffsetAboveSpawn;
+    this.drawGameOverLimitLine();
     this.drawGameOverDebugLine();
+  }
+
+  drawGameOverLimitLine() {
+    if (!this.gameOverLimitGraphics) return;
+
+    const lineStartX = GAME_OVER_LIMIT_CONFIG.sideInset;
+    const lineEndX = GAME_WIDTH - GAME_OVER_LIMIT_CONFIG.sideInset;
+    const dashStep = GAME_OVER_LIMIT_CONFIG.dashLength + GAME_OVER_LIMIT_CONFIG.gapLength;
+
+    this.gameOverLimitGraphics.clear();
+    this.gameOverLimitGraphics.lineStyle(
+      GAME_OVER_LIMIT_CONFIG.width,
+      GAME_OVER_LIMIT_CONFIG.color,
+      GAME_OVER_LIMIT_CONFIG.alpha,
+    );
+
+    for (let dashStartX = lineStartX; dashStartX < lineEndX; dashStartX += dashStep) {
+      this.gameOverLimitGraphics.lineBetween(
+        dashStartX,
+        this.gameOverLineY,
+        Math.min(dashStartX + GAME_OVER_LIMIT_CONFIG.dashLength, lineEndX),
+        this.gameOverLineY,
+      );
+    }
   }
 
   createGameOverDebugLine() {
