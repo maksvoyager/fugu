@@ -56,6 +56,9 @@
   --modal-kicker-font-size: 9px;
   --modal-title-font-size: 29px;
   --modal-result-font-size: 27px;
+  --sound-toggle-gap: 10px;
+  --sound-toggle-icon-size: 22px;
+  --sound-toggle-off-opacity: .76;
 
   /* ---------- CSS-анимации и эффекты ---------- */
   --button-transition-duration: .16s;
@@ -461,6 +464,37 @@ button { font: inherit; }
 }
 .modal-button.secondary { background: rgba(181,230,246,.17); }
 .modal-button.accent { background: linear-gradient(145deg, rgba(129,238,255,.7), rgba(56,177,234,.52)); box-shadow: inset 0 2px 4px #fff8, 0 8px 25px rgba(0,177,232,.3); }
+.sound-toggle-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sound-toggle-gap);
+}
+.sound-toggle-icon {
+  width: var(--sound-toggle-icon-size);
+  height: var(--sound-toggle-icon-size);
+  flex: 0 0 var(--sound-toggle-icon-size);
+  fill: #fff;
+  filter: drop-shadow(0 2px 3px rgba(0,72,121,.3));
+}
+.sound-toggle-icon path + path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.ambient-toggle-button .sound-toggle-icon path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.sound-toggle-icon-off { display: none; }
+.sound-toggle-button[aria-pressed="false"] {
+  opacity: var(--sound-toggle-off-opacity);
+}
+.sound-toggle-button[aria-pressed="false"] .sound-toggle-icon-on { display: none; }
+.sound-toggle-button[aria-pressed="false"] .sound-toggle-icon-off { display: block; }
 .results { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: -5px 0 20px; }
 .results div { padding: 11px 8px; border: 1px solid rgba(255,255,255,.28); border-radius: 22px; background: rgba(255,255,255,.1); }
 .results strong { display: block; font-size: var(--modal-result-font-size); line-height: 1.1; text-shadow: 0 2px 6px rgba(0,62,117,.3); }

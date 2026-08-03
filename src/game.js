@@ -13,6 +13,14 @@ const AUDIO = Object.freeze({
   recordVolume: 0.70,
   maxMergeVolume: 0.75,
   gameOverVolume: 0.55,
+  ambientEnabled: true,
+  ambientVolume: 0.12,
+  ambientFadeInMs: 1800,
+  ambientFadeOutMs: 500,
+  ambientPauseVolumeRatio: 0.35,
+  ambientGameOverVolumeRatio: 0.5,
+  ambientKey: 'underwater_ambient',
+  ambientPath: './assets/audio/underwater_ambient.mp3',
   files: Object.freeze({
     button: Object.freeze({ key: 'sound-button', path: './assets/audio/button.mp3', volume: 'buttonVolume' }),
     release: Object.freeze({ key: 'sound-release', path: './assets/audio/release.mp3', volume: 'releaseVolume' }),
@@ -222,6 +230,7 @@ const WATER_SURFACE_TEXTURE_KEY = 'water-surface';
 const WATER_SURFACE_TEXTURE_PATH = './assets/backgrounds/water_surface.png';
 const BEST_SCORE_KEY = 'fugu-merge-best-score';
 const SOUND_ENABLED_KEY = 'fugu-merge-sound-enabled';
+const AMBIENT_ENABLED_KEY = 'fugu-merge-ambient-enabled';
 const URL_OPTIONS = new URLSearchParams(window.location.search);
 const DEBUG_PHYSICS = URL_OPTIONS.has('debugPhysics');
 const QA_MAX_MERGE = URL_OPTIONS.has('qaMaxMerge');
@@ -282,6 +291,10 @@ const ui = {
   pauseButton: document.querySelector('#pause-button'),
   pauseModal: document.querySelector('#pause-modal'),
   continueButton: document.querySelector('#continue-button'),
+  soundToggleButton: document.querySelector('#sound-toggle-button'),
+  soundToggleText: document.querySelector('#sound-toggle-text'),
+  ambientToggleButton: document.querySelector('#ambient-toggle-button'),
+  ambientToggleText: document.querySelector('#ambient-toggle-text'),
   pauseRestartButton: document.querySelector('#pause-restart-button'),
   gameOver: document.querySelector('#game-over'),
   finalScore: document.querySelector('#final-score'),
@@ -329,6 +342,23 @@ function saveSoundEnabled(value) {
   }
 }
 
+function readAmbientEnabled() {
+  try {
+    const savedValue = localStorage.getItem(AMBIENT_ENABLED_KEY);
+    return savedValue === null ? AUDIO.ambientEnabled : savedValue !== 'false';
+  } catch {
+    return AUDIO.ambientEnabled;
+  }
+}
+
+function saveAmbientEnabled(value) {
+  try {
+    localStorage.setItem(AMBIENT_ENABLED_KEY, String(value));
+  } catch {
+    // Игра продолжит работать, даже если браузер запретил локальное хранилище.
+  }
+}
+
 class FruitScene extends Phaser.Scene {
   // ======================== Инициализация сцены ========================
 
@@ -357,7 +387,10 @@ class FruitScene extends Phaser.Scene {
     this.gameEnded = false;
     this.isPaused = false;
     this.sounds = null;
+    this.ambientSound = null;
+    this.ambientTween = null;
     this.soundEnabled = readSoundEnabled();
+    this.ambientEnabled = readAmbientEnabled();
     this.audioUnlocked = false;
     this.audioUnlockPromise = null;
     this.handleAudioUnlock = null;
@@ -383,6 +416,7 @@ class FruitScene extends Phaser.Scene {
     this.load.image(SEABED_TEXTURE_KEY, SEABED_TEXTURE_PATH);
     this.load.image(WATER_SURFACE_TEXTURE_KEY, WATER_SURFACE_TEXTURE_PATH);
     Object.values(AUDIO.files).forEach(({ key, path }) => this.load.audio(key, path));
+    this.load.audio(AUDIO.ambientKey, AUDIO.ambientPath);
   }
 
   create() {
@@ -408,6 +442,7 @@ class FruitScene extends Phaser.Scene {
     this.gameEnded = false;
     this.isPaused = false;
     this.soundEnabled = readSoundEnabled();
+    this.ambientEnabled = readAmbientEnabled();
     this.recordSoundPlayed = false;
     this.gameOverSoundPlayed = false;
 
@@ -455,6 +490,7 @@ class FruitScene extends Phaser.Scene {
         this.sound.off('unlocked', this.handleSoundManagerUnlocked);
       }
       this.load.off('loaderror', this.handleAssetLoadError);
+      this.stopAmbientTween();
     });
     this.createInvisibleBounds();
 
@@ -500,6 +536,12 @@ class FruitScene extends Phaser.Scene {
         ]),
       );
     }
+    if (!this.ambientSound && this.cache.audio.exists(AUDIO.ambientKey)) {
+      this.ambientSound = this.sound.add(AUDIO.ambientKey, {
+        loop: true,
+        volume: 0,
+      });
+    }
 
     if (this.handleSoundManagerUnlocked) {
       this.sound.off('unlocked', this.handleSoundManagerUnlocked);
@@ -514,10 +556,16 @@ class FruitScene extends Phaser.Scene {
 
   installAudioUnlock() {
     if (!this.handleAudioVisibilityChange) {
-      this.handleAudioVisibilityChange = () => this.refreshAudioContextState();
+      this.handleAudioVisibilityChange = () => {
+        if (document.hidden) this.pauseAmbient();
+        this.refreshAudioContextState(true);
+      };
     }
     if (!this.handleAudioPageShow) {
-      this.handleAudioPageShow = () => this.refreshAudioContextState(true);
+      this.handleAudioPageShow = () => {
+        this.pauseAmbient();
+        this.refreshAudioContextState(true);
+      };
     }
     document.removeEventListener('visibilitychange', this.handleAudioVisibilityChange);
     window.removeEventListener('pageshow', this.handleAudioPageShow);
@@ -578,12 +626,14 @@ class FruitScene extends Phaser.Scene {
       ui.gameWrap.dataset.qaAudioContextState = this.sound?.context?.state || 'html5-audio';
     }
     console.info(`[Audio] ${message}`);
+    this.startAmbient();
   }
 
   refreshAudioContextState(forceGestureCheck = false) {
     const context = this.sound?.context;
     if (!context) {
-      this.audioUnlocked = true;
+      this.audioUnlocked = !forceGestureCheck;
+      if (forceGestureCheck) this.installAudioUnlock();
       return;
     }
 
@@ -639,9 +689,20 @@ class FruitScene extends Phaser.Scene {
     this.soundEnabled = Boolean(value);
     if (!this.soundEnabled) {
       Object.values(this.sounds || {}).forEach((sound) => sound?.stop());
+      this.fadeOutAmbient();
+    } else {
+      this.startAmbient();
     }
     saveSoundEnabled(this.soundEnabled);
+    this.updateSoundToggleInterface();
     return this.soundEnabled;
+  }
+
+  updateSoundToggleInterface() {
+    const isEnabled = this.soundEnabled;
+    ui.soundToggleButton.setAttribute('aria-pressed', String(isEnabled));
+    ui.soundToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить звук' : 'Включить звук');
+    ui.soundToggleText.textContent = isEnabled ? 'Звук включён' : 'Звук выключен';
   }
 
   enableSound() {
@@ -654,6 +715,111 @@ class FruitScene extends Phaser.Scene {
 
   toggleSound() {
     return this.setSoundEnabled(!this.soundEnabled);
+  }
+
+  // ---------- Зацикленный подводный эмбиент ----------
+
+  setAmbientEnabled(value) {
+    this.ambientEnabled = Boolean(value);
+    saveAmbientEnabled(this.ambientEnabled);
+    this.updateAmbientToggleInterface();
+    if (this.ambientEnabled) this.startAmbient();
+    else this.fadeOutAmbient();
+    return this.ambientEnabled;
+  }
+
+  updateAmbientToggleInterface() {
+    const isEnabled = this.ambientEnabled;
+    ui.ambientToggleButton.setAttribute('aria-pressed', String(isEnabled));
+    ui.ambientToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить атмосферу' : 'Включить атмосферу');
+    ui.ambientToggleText.textContent = isEnabled ? 'Звук окружения ВКЛ' : 'Звук окружения ВЫКЛ';
+  }
+
+  ambientTargetVolume() {
+    if (this.gameEnded) return AUDIO.ambientVolume * AUDIO.ambientGameOverVolumeRatio;
+    if (this.isPaused) return AUDIO.ambientVolume * AUDIO.ambientPauseVolumeRatio;
+    return AUDIO.ambientVolume;
+  }
+
+  stopAmbientTween() {
+    this.ambientTween?.stop();
+    this.ambientTween = null;
+  }
+
+  fadeAmbientTo(targetVolume, duration) {
+    if (!this.ambientSound) return;
+    this.stopAmbientTween();
+    const tween = this.tweens.add({
+      targets: this.ambientSound,
+      volume: targetVolume,
+      duration,
+      ease: 'Sine.InOut',
+      onComplete: () => {
+        if (this.ambientTween === tween) this.ambientTween = null;
+        if (QA_AUDIO_EVENTS) ui.gameWrap.dataset.qaAmbientVolume = String(targetVolume);
+      },
+    });
+    this.ambientTween = tween;
+  }
+
+  startAmbient() {
+    if (!this.ambientSound || !this.soundEnabled || !this.ambientEnabled || !this.audioUnlocked) return false;
+    if (document.hidden || this.sound?.mute) return false;
+    const context = this.sound?.context;
+    if (context && context.state !== 'running') return false;
+
+    if (this.ambientSound.isPaused) {
+      this.ambientSound.resume();
+    } else if (!this.ambientSound.isPlaying) {
+      this.ambientSound.setVolume(0);
+      if (!this.ambientSound.play()) return false;
+    }
+
+    const targetVolume = this.ambientTargetVolume();
+    const duration = this.ambientSound.volume > targetVolume
+      ? AUDIO.ambientFadeOutMs
+      : AUDIO.ambientFadeInMs;
+    this.fadeAmbientTo(targetVolume, duration);
+    if (QA_AUDIO_EVENTS) {
+      ui.gameWrap.dataset.qaAmbientState = 'playing';
+      ui.gameWrap.dataset.qaAmbientTargetVolume = String(targetVolume);
+    }
+    return true;
+  }
+
+  pauseAmbient() {
+    if (!this.ambientSound) return;
+    this.stopAmbientTween();
+    this.ambientSound.setVolume(0);
+    if (this.ambientSound.isPlaying) this.ambientSound.pause();
+    if (QA_AUDIO_EVENTS) ui.gameWrap.dataset.qaAmbientState = 'paused';
+  }
+
+  fadeOutAmbient() {
+    if (!this.ambientSound) return;
+    this.stopAmbientTween();
+    if (!this.ambientSound.isPlaying) {
+      this.ambientSound.setVolume(0);
+      return;
+    }
+
+    const ambientSound = this.ambientSound;
+    if (QA_AUDIO_EVENTS) ui.gameWrap.dataset.qaAmbientState = 'fading-out';
+    const tween = this.tweens.add({
+      targets: ambientSound,
+      volume: 0,
+      duration: AUDIO.ambientFadeOutMs,
+      ease: 'Sine.InOut',
+      onComplete: () => {
+        if (ambientSound.isPlaying) ambientSound.pause();
+        if (this.ambientTween === tween) this.ambientTween = null;
+        if (QA_AUDIO_EVENTS) {
+          ui.gameWrap.dataset.qaAmbientState = 'paused';
+          ui.gameWrap.dataset.qaAmbientVolume = '0';
+        }
+      },
+    });
+    this.ambientTween = tween;
   }
 
   // ======================== Панель прогрессии ========================
@@ -1554,6 +1720,7 @@ class FruitScene extends Phaser.Scene {
       this.matter.world.resume();
       if (this.currentFruit?.isHeld) this.positionCurrentFruit(this.lastDragX);
     }
+    this.startAmbient();
   }
 
   endGame() {
@@ -1563,6 +1730,7 @@ class FruitScene extends Phaser.Scene {
       this.gameOverSoundPlayed = true;
       this.playSound('gameOver');
     }
+    this.startAmbient();
     this.canDrop = false;
     this.controlState = CONTROL_STATES.RELEASED;
     this.activePointerId = null;
@@ -1594,7 +1762,10 @@ class FruitScene extends Phaser.Scene {
     ui.gameWrap.classList.remove('is-danger');
     ui.pauseModal.hidden = true;
     ui.gameOver.hidden = true;
+    this.updateSoundToggleInterface();
+    this.updateAmbientToggleInterface();
     this.renderProgression();
+    this.startAmbient();
   }
 }
 
@@ -1661,6 +1832,17 @@ ui.continueButton.addEventListener('click', () => {
   const scene = activeScene();
   scene.playSound('button');
   scene.setPaused(false);
+});
+ui.soundToggleButton.addEventListener('click', () => {
+  const scene = activeScene();
+  if (scene.soundEnabled) scene.playSound('button');
+  scene.toggleSound();
+  if (scene.soundEnabled) scene.playSound('button');
+});
+ui.ambientToggleButton.addEventListener('click', () => {
+  const scene = activeScene();
+  scene.playSound('button');
+  scene.setAmbientEnabled(!scene.ambientEnabled);
 });
 ui.pauseRestartButton.addEventListener('click', restartGame);
 ui.restartButton.addEventListener('click', restartGame);
