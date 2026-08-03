@@ -21,16 +21,23 @@ export const PROGRESS_UI = {
 
 export const STARTING_LEVELS = 1;
 
-// Основные параметры поведения воды и проигрыша.
+// ---------- Баланс, вода и Game Over ----------
 export const GAMEPLAY = {
+  // Очки и максимальный уровень.
   maxLevelMergeScore: 3200,
-  riseSpeedMultiplier: 1.2,
+
+  // Скорость и сопротивление воды.
+  riseSpeedMultiplier: 1.5,
   buoyancyForce: -0.000264,
   surfaceFadeDistance: 110,
   waterDrag: 0.045,
   maxRiseSpeed: 5.28,
   angularDamping: 0.985,
+
+  // Появление следующей рыбы.
   spawnDelay: 620,
+
+  // Условия переполнения поля.
   dangerDelay: 2600,
   dangerStabilizationDelay: 850,
   dangerStableSpeed: 0.65,

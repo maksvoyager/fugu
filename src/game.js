@@ -1,13 +1,202 @@
 import { FRUITS, STARTING_LEVELS, GAMEPLAY, PROGRESS_UI } from './fruits.js';
 
 const Phaser = window.Phaser;
-const GAME_WIDTH = 540;
-const DESKTOP_GAME_HEIGHT = 960;
-const MOBILE_BREAKPOINT = 600;
-const MIN_MOBILE_GAME_HEIGHT = 760;
-const SPAWN_BOTTOM_OFFSET = 200;
-const WALL_SIZE = 28;
-const SURFACE_Y = 104;
+
+// ---------- Основная геометрия сцены ----------
+const SCENE_CONFIG = Object.freeze({
+  width: 540,
+  desktopHeight: 960,
+  mobileBreakpoint: 600,
+  minimumMobileHeight: 760,
+  spawnBottomOffset: 200,
+  wallSize: 28,
+  surfaceY: 104,
+  maximumStartingLevelCount: 3,
+  maximumRenderResolution: 2,
+});
+
+// ---------- Физика Matter.js ----------
+const PHYSICS_CONFIG = Object.freeze({
+  positionIterations: 8,
+  velocityIterations: 6,
+  wallFriction: 0.08,
+  wallStaticFriction: 0.05,
+  surfaceStaticFriction: 0.04,
+  restitution: 0.02,
+  fishDensity: 0.0018,
+  releaseVelocityY: -0.35,
+  maximumHorizontalSpeed: 3.2,
+  stablePileDistance: 260,
+  stablePileSpeed: 0.16,
+  minimumBuoyancyFactor: 0.01,
+  minimumAngularVelocity: 0.0005,
+  trailMinimumRiseSpeed: -0.45,
+});
+
+// ---------- Вертикальная линия наведения ----------
+const GUIDE_CONFIG = Object.freeze({
+  width: 2,
+  color: 0xffffff,
+  alpha: 0.22,
+  surfaceOffset: 26,
+  depth: 1,
+});
+
+// ---------- Визуальные параметры рыб ----------
+const FISH_VISUAL_CONFIG = Object.freeze({
+  imageDepth: 4,
+  fallbackCircleDepth: 3,
+  fallbackStrokeWidth: 4,
+  fallbackStrokeAlpha: 0.58,
+  shineOffsetX: 0.28,
+  shineOffsetY: 0.3,
+  shineWidthRatio: 0.42,
+  shineHeightRatio: 0.2,
+  shineAlpha: 0.48,
+  labelMinimumSize: 24,
+  labelSizeRatio: 0.78,
+  labelDepth: 5,
+  labelShadowOffsetY: 3,
+  labelShadowBlur: 5,
+  labelShadowColor: '#00699d',
+  colliderDepth: 2,
+  wobbleSpeedDivisor: 1.4,
+  wobbleTimeFactor: 0.0022,
+  wobbleAmplitude: 0.025,
+  labelRotationFactor: 0.25,
+  initialBubbleDelayMax: 300,
+});
+
+// ---------- Поверхность воды и декоративный фон ----------
+const BACKDROP_CONFIG = Object.freeze({
+  backgroundDepth: 0,
+  seabedDepth: 0.5,
+  seabedOriginX: 0.5,
+  seabedOriginY: 1,
+  surfaceLineWidth: 5,
+  surfaceLineColor: 0xe8fdff,
+  surfaceLineAlpha: 0.92,
+  surfaceStep: 15,
+  surfaceWaveFrequency: 0.055,
+  surfaceWaveAmplitude: 5,
+  surfaceRippleFrequency: 0.12,
+  surfaceRippleAmplitude: 2,
+  bubbleLineWidth: 2,
+  bubbleColor: 0xffffff,
+  bubbleAlpha: 0.22,
+  decorativeBubbles: [
+    [68, 330, 7], [462, 405, 5], [102, 615, 4],
+    [434, 690, 8], [160, 770, 5], [382, 525, 3],
+  ],
+});
+
+// ---------- Тайминги интерфейса и служебных сценариев ----------
+const TIMING_CONFIG = Object.freeze({
+  initialSpawnDelay: 300,
+  nextPreviewQaDelay: 450,
+  unlockAnimationCleanup: 650,
+  trailBubbleBaseInterval: 430,
+  trailBubbleLevelInterval: 45,
+});
+
+// ---------- Эффекты объединения и пузырьков ----------
+const EFFECTS_CONFIG = Object.freeze({
+  mergeVelocityRetentionX: 0.45,
+  mergeMinimumRiseVelocity: -0.8,
+  mergeBounceStartScale: 0.72,
+  mergeBounceDuration: 250,
+  ringRadius: 18,
+  ringStrokeWidth: 4,
+  ringColor: 0xd9faff,
+  ringAlpha: 0.85,
+  ringDepth: 9,
+  ringEndScale: 3.2,
+  ringDuration: 420,
+  mergeBubbleCount: 10,
+  mergeBubbleMinRadius: 3,
+  mergeBubbleMaxRadius: 6,
+  mergeBubbleAlpha: 0.85,
+  mergeBubbleDepth: 10,
+  mergeBubbleMinDistance: 35,
+  mergeBubbleMaxDistance: 57,
+  mergeBubbleRiseOffset: 9,
+  mergeBubbleEndScale: 0.25,
+  mergeBubbleMinDuration: 300,
+  mergeBubbleMaxDuration: 460,
+  pointsOffsetY: 20,
+  pointsEndOffsetY: 76,
+  pointsFontSize: 22,
+  pointsDepth: 11,
+  pointsDuration: 650,
+  pointsShadowOffsetY: 3,
+  pointsShadowBlur: 6,
+  pointsShadowColor: '#00699b',
+  trailHorizontalRadiusRatio: 0.25,
+  trailVerticalRadiusRatio: 0.72,
+  trailMinRadius: 2,
+  trailMaxRadius: 5,
+  trailAlpha: 0.4,
+  trailStrokeWidth: 1,
+  trailStrokeAlpha: 0.5,
+  trailDepth: 2,
+  trailMinRise: 25,
+  trailMaxRise: 48,
+  trailHorizontalDrift: 8,
+  trailEndScale: 0.5,
+  trailMinDuration: 550,
+  trailMaxDuration: 800,
+  unlockBubbleCount: 5,
+  unlockBubbleStartLeft: 32,
+  unlockBubbleLeftStep: 9,
+  unlockBubbleBottom: 10,
+  unlockBubbleCenterIndex: 2,
+  unlockBubbleDriftStep: 8,
+  unlockBubbleDuration: 750,
+});
+
+// ---------- Отладочные сценарии ----------
+const QA_CONFIG = Object.freeze({
+  setupDelay: 120,
+  mergeOffsetX: 62,
+  mergeY: 410,
+  mergeVelocityX: 0.25,
+  mergeVelocityY: -0.2,
+  gameOverLevelIndex: 2,
+  gameOverOverlap: 5,
+  progressionStartDelay: 700,
+  progressionStepDelay: 650,
+  pileLayout: [
+    [0, 100, 235], [1, 170, 255], [2, 245, 250],
+    [3, 335, 255], [4, 430, 245], [5, 275, 390],
+  ],
+});
+
+const DEBUG_VIEW_CONFIG = Object.freeze({
+  depth: 30,
+  labelDepth: 31,
+  labelX: 12,
+  labelCreateOffsetY: 24,
+  labelDrawOffsetY: 27,
+  fontSize: 15,
+  lineWidth: 2,
+  lineColor: 0xff4968,
+  lineAlpha: 0.95,
+  labelColor: '#ffedf0',
+  labelBackground: 'rgba(128, 0, 28, 0.72)',
+  labelPaddingX: 7,
+  labelPaddingY: 4,
+});
+
+const NUMBER_FORMAT_CONFIG = Object.freeze({
+  normalizedCenter: 0.5,
+  percentMultiplier: 100,
+  decimalRadix: 10,
+  fullCircle: Math.PI * 2,
+});
+
+const GAME_WIDTH = SCENE_CONFIG.width;
+const WALL_SIZE = SCENE_CONFIG.wallSize;
+const SURFACE_Y = SCENE_CONFIG.surfaceY;
 const SEABED_TEXTURE_KEY = 'bottom-seabed';
 const SEABED_TEXTURE_PATH = './assets/backgrounds/bottom_seabed.png';
 const BEST_SCORE_KEY = 'fugu-merge-best-score';
@@ -18,8 +207,14 @@ const QA_CREATE_MAX_LEVEL = URL_OPTIONS.has('qaCreateMaxLevel');
 const QA_PHYSICS_PILE = URL_OPTIONS.has('qaPhysicsPile');
 const QA_GAME_OVER = URL_OPTIONS.has('qaGameOver');
 const QA_PROGRESSION = URL_OPTIONS.has('qaProgression');
-const QA_NEXT_LEVEL = Number.parseInt(URL_OPTIONS.get('qaNextLevel') || '', 10) - 1;
-const QA_NEXT_PREVIEW_LEVEL = Number.parseInt(URL_OPTIONS.get('qaNextPreview') || '', 10) - 1;
+const QA_NEXT_LEVEL = Number.parseInt(
+  URL_OPTIONS.get('qaNextLevel') || '',
+  NUMBER_FORMAT_CONFIG.decimalRadix,
+) - 1;
+const QA_NEXT_PREVIEW_LEVEL = Number.parseInt(
+  URL_OPTIONS.get('qaNextPreview') || '',
+  NUMBER_FORMAT_CONFIG.decimalRadix,
+) - 1;
 const DEBUG_GAME_OVER_LINE = URL_OPTIONS.has('debugGameOverLine');
 const MAX_LEVEL_INDEX = FRUITS.length - 1;
 const CONTROL_STATES = Object.freeze({
@@ -38,12 +233,12 @@ function viewportSize() {
 
 function calculateGameHeight() {
   const { width, height } = viewportSize();
-  if (width > MOBILE_BREAKPOINT) return DESKTOP_GAME_HEIGHT;
-  return Math.max(MIN_MOBILE_GAME_HEIGHT, Math.round((GAME_WIDTH * height) / width));
+  if (width > SCENE_CONFIG.mobileBreakpoint) return SCENE_CONFIG.desktopHeight;
+  return Math.max(SCENE_CONFIG.minimumMobileHeight, Math.round((GAME_WIDTH * height) / width));
 }
 
 let gameHeight = calculateGameHeight();
-const spawnY = () => gameHeight - SPAWN_BOTTOM_OFFSET;
+const spawnY = () => gameHeight - SCENE_CONFIG.spawnBottomOffset;
 
 const progressionElement = document.querySelector('#progression');
 FRUITS.forEach((config, index) => {
@@ -95,6 +290,8 @@ function saveBestScore(value) {
 }
 
 class FruitScene extends Phaser.Scene {
+  // ======================== Инициализация сцены ========================
+
   constructor() {
     super('FruitScene');
     this.fruits = new Map();
@@ -190,8 +387,8 @@ class FruitScene extends Phaser.Scene {
     });
     this.createInvisibleBounds();
 
-    this.matter.world.engine.positionIterations = 8;
-    this.matter.world.engine.velocityIterations = 6;
+    this.matter.world.engine.positionIterations = PHYSICS_CONFIG.positionIterations;
+    this.matter.world.engine.velocityIterations = PHYSICS_CONFIG.velocityIterations;
     this.matter.world.on('collisionstart', this.handleCollisions, this);
     this.matter.world.on('collisionend', this.handleCollisionEnd, this);
     this.input.on('pointerdown', this.beginCurrentFruitDrag, this);
@@ -204,9 +401,9 @@ class FruitScene extends Phaser.Scene {
       ? QA_NEXT_LEVEL
       : this.randomStartingLevel();
     this.updateNextPreview();
-    this.time.delayedCall(300, () => this.spawnFruit());
+    this.time.delayedCall(TIMING_CONFIG.initialSpawnDelay, () => this.spawnFruit());
     if (Number.isInteger(QA_NEXT_PREVIEW_LEVEL) && QA_NEXT_PREVIEW_LEVEL >= 0 && QA_NEXT_PREVIEW_LEVEL < FRUITS.length) {
-      this.time.delayedCall(450, () => {
+      this.time.delayedCall(TIMING_CONFIG.nextPreviewQaDelay, () => {
         this.nextLevel = QA_NEXT_PREVIEW_LEVEL;
         this.updateNextPreview();
       });
@@ -217,6 +414,8 @@ class FruitScene extends Phaser.Scene {
     if (QA_GAME_OVER) this.setupGameOverQa();
     if (QA_PROGRESSION) this.setupProgressionQa();
   }
+
+  // ======================== Панель прогрессии ========================
 
   unlockAllLevelsForQa() {
     this.unlockedLevels = new Set(FRUITS.map((_, index) => index));
@@ -237,8 +436,14 @@ class FruitScene extends Phaser.Scene {
     image.draggable = false;
     image.style.setProperty('--progress-scale', String(scale));
     if (config) {
-      image.style.setProperty('--progress-offset-x', `${(0.5 - config.originX) * 100}%`);
-      image.style.setProperty('--progress-offset-y', `${(0.5 - config.originY) * 100}%`);
+      image.style.setProperty(
+        '--progress-offset-x',
+        `${(NUMBER_FORMAT_CONFIG.normalizedCenter - config.originX) * NUMBER_FORMAT_CONFIG.percentMultiplier}%`,
+      );
+      image.style.setProperty(
+        '--progress-offset-y',
+        `${(NUMBER_FORMAT_CONFIG.normalizedCenter - config.originY) * NUMBER_FORMAT_CONFIG.percentMultiplier}%`,
+      );
     }
     return image;
   }
@@ -294,7 +499,7 @@ class FruitScene extends Phaser.Scene {
     if (animate) {
       // Класс добавляется после вставки изображения, чтобы анимация всегда стартовала с 0.75.
       window.requestAnimationFrame(() => slot.classList.add('just-unlocked'));
-      window.setTimeout(() => slot.classList.remove('just-unlocked'), 650);
+      window.setTimeout(() => slot.classList.remove('just-unlocked'), TIMING_CONFIG.unlockAnimationCleanup);
     }
   }
 
@@ -303,13 +508,15 @@ class FruitScene extends Phaser.Scene {
     ui.progressSlots.forEach((_, index) => this.renderProgressSlot(index));
   }
 
+  // ======================== Служебные QA-сценарии ========================
+
   setupMaxMergeQa() {
     this.unlockAllLevelsForQa();
-    this.time.delayedCall(120, () => {
-      const left = this.createFruit(GAME_WIDTH / 2 - 62, 410, MAX_LEVEL_INDEX);
-      const right = this.createFruit(GAME_WIDTH / 2 + 62, 410, MAX_LEVEL_INDEX);
-      left.physics.setVelocity(0.25, -0.2);
-      right.physics.setVelocity(-0.25, -0.2);
+    this.time.delayedCall(QA_CONFIG.setupDelay, () => {
+      const left = this.createFruit(GAME_WIDTH / 2 - QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, MAX_LEVEL_INDEX);
+      const right = this.createFruit(GAME_WIDTH / 2 + QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, MAX_LEVEL_INDEX);
+      left.physics.setVelocity(QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
+      right.physics.setVelocity(-QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
     });
   }
 
@@ -317,22 +524,18 @@ class FruitScene extends Phaser.Scene {
     const sourceLevel = MAX_LEVEL_INDEX - 1;
     this.unlockedLevels = new Set(FRUITS.slice(0, MAX_LEVEL_INDEX).map((_, index) => index));
     this.renderProgression();
-    this.time.delayedCall(120, () => {
-      const left = this.createFruit(GAME_WIDTH / 2 - 62, 410, sourceLevel);
-      const right = this.createFruit(GAME_WIDTH / 2 + 62, 410, sourceLevel);
-      left.physics.setVelocity(0.25, -0.2);
-      right.physics.setVelocity(-0.25, -0.2);
+    this.time.delayedCall(QA_CONFIG.setupDelay, () => {
+      const left = this.createFruit(GAME_WIDTH / 2 - QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, sourceLevel);
+      const right = this.createFruit(GAME_WIDTH / 2 + QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, sourceLevel);
+      left.physics.setVelocity(QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
+      right.physics.setVelocity(-QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
     });
   }
 
   setupPhysicsPileQa() {
     this.unlockAllLevelsForQa();
-    const layout = [
-      [0, 100, 235], [1, 170, 255], [2, 245, 250],
-      [3, 335, 255], [4, 430, 245], [5, 275, 390],
-    ];
-    this.time.delayedCall(120, () => {
-      layout.forEach(([level, x, y]) => {
+    this.time.delayedCall(QA_CONFIG.setupDelay, () => {
+      QA_CONFIG.pileLayout.forEach(([level, x, y]) => {
         const fruit = this.createFruit(x, y, level);
         fruit.bornAt = Number.POSITIVE_INFINITY;
       });
@@ -340,10 +543,14 @@ class FruitScene extends Phaser.Scene {
   }
 
   setupGameOverQa() {
-    this.time.delayedCall(120, () => {
-      const level = 2;
+    this.time.delayedCall(QA_CONFIG.setupDelay, () => {
+      const level = QA_CONFIG.gameOverLevelIndex;
       const radius = FRUITS[level].radius;
-      const fruit = this.createFruit(GAME_WIDTH / 2, this.gameOverLineY - radius + 5, level);
+      const fruit = this.createFruit(
+        GAME_WIDTH / 2,
+        this.gameOverLineY - radius + QA_CONFIG.gameOverOverlap,
+        level,
+      );
       fruit.bornAt = this.time.now - GAMEPLAY.dangerStabilizationDelay;
       fruit.physics.setStatic(true);
     });
@@ -352,26 +559,37 @@ class FruitScene extends Phaser.Scene {
   setupProgressionQa() {
     // Служебный сценарий последовательно показывает открытие всех уровней из конфигурации.
     FRUITS.slice(1).forEach((_, index) => {
-      this.time.delayedCall(700 + index * 650, () => this.unlockLevel(index + 1));
+      this.time.delayedCall(
+        QA_CONFIG.progressionStartDelay + index * QA_CONFIG.progressionStepDelay,
+        () => this.unlockLevel(index + 1),
+      );
     });
   }
 
+  // ======================== Фон и границы поля ========================
+
   createBackdrop() {
     this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
-    const graphics = this.add.graphics().setDepth(0);
+    const graphics = this.add.graphics().setDepth(BACKDROP_CONFIG.backgroundDepth);
 
     // Мягкая светлая поверхность воды. Это только декор, коллайдер расположен отдельно.
-    graphics.lineStyle(5, 0xe8fdff, 0.92);
+    graphics.lineStyle(
+      BACKDROP_CONFIG.surfaceLineWidth,
+      BACKDROP_CONFIG.surfaceLineColor,
+      BACKDROP_CONFIG.surfaceLineAlpha,
+    );
     graphics.beginPath();
     graphics.moveTo(0, SURFACE_Y);
-    for (let x = 0; x <= GAME_WIDTH; x += 15) {
-      graphics.lineTo(x, SURFACE_Y + Math.sin(x * 0.055) * 5 + Math.sin(x * 0.12) * 2);
+    for (let x = 0; x <= GAME_WIDTH; x += BACKDROP_CONFIG.surfaceStep) {
+      const waveY = Math.sin(x * BACKDROP_CONFIG.surfaceWaveFrequency) * BACKDROP_CONFIG.surfaceWaveAmplitude;
+      const rippleY = Math.sin(x * BACKDROP_CONFIG.surfaceRippleFrequency) * BACKDROP_CONFIG.surfaceRippleAmplitude;
+      graphics.lineTo(x, SURFACE_Y + waveY + rippleY);
     }
     graphics.strokePath();
 
-    graphics.lineStyle(2, 0xffffff, 0.22);
-    [[68, 330, 7], [462, 405, 5], [102, 615, 4], [434, 690, 8], [160, 770, 5], [382, 525, 3]].forEach(([x, y, r]) => {
-      graphics.strokeCircle(x, y, r);
+    graphics.lineStyle(BACKDROP_CONFIG.bubbleLineWidth, BACKDROP_CONFIG.bubbleColor, BACKDROP_CONFIG.bubbleAlpha);
+    BACKDROP_CONFIG.decorativeBubbles.forEach(([bubbleX, bubbleY, bubbleRadius]) => {
+      graphics.strokeCircle(bubbleX, bubbleY, bubbleRadius);
     });
 
     // Готовое изображение дна: масштабируется по ширине без искажения
@@ -379,13 +597,13 @@ class FruitScene extends Phaser.Scene {
     if (this.textures.exists(SEABED_TEXTURE_KEY)) {
       this.seabed = this.add
         .image(GAME_WIDTH / 2, gameHeight, SEABED_TEXTURE_KEY)
-        .setOrigin(0.5, 1)
-        .setDepth(0.5);
+        .setOrigin(BACKDROP_CONFIG.seabedOriginX, BACKDROP_CONFIG.seabedOriginY)
+        .setDepth(BACKDROP_CONFIG.seabedDepth);
       this.seabed.setScale(GAME_WIDTH / this.seabed.width);
     }
 
     // Graphics создаётся один раз; дальше линия только перерисовывается и меняет видимость.
-    this.guide = this.add.graphics().setDepth(1).setVisible(false);
+    this.guide = this.add.graphics().setDepth(GUIDE_CONFIG.depth).setVisible(false);
     this.recalculateGameOverLine();
     this.createGameOverDebugLine();
   }
@@ -408,30 +626,53 @@ class FruitScene extends Phaser.Scene {
 
   createGameOverDebugLine() {
     if (!DEBUG_GAME_OVER_LINE) return;
-    this.gameOverDebugGraphics = this.add.graphics().setDepth(30);
-    this.gameOverDebugLabel = this.add.text(12, this.gameOverLineY - 24, 'GAME OVER LIMIT', {
+    this.gameOverDebugGraphics = this.add.graphics().setDepth(DEBUG_VIEW_CONFIG.depth);
+    this.gameOverDebugLabel = this.add.text(
+      DEBUG_VIEW_CONFIG.labelX,
+      this.gameOverLineY - DEBUG_VIEW_CONFIG.labelCreateOffsetY,
+      'GAME OVER LIMIT',
+      {
       fontFamily: 'Nunito, sans-serif',
-      fontSize: '15px',
+      fontSize: `${DEBUG_VIEW_CONFIG.fontSize}px`,
       fontStyle: '900',
-      color: '#ffedf0',
-      backgroundColor: 'rgba(128, 0, 28, 0.72)',
-      padding: { x: 7, y: 4 },
-    }).setDepth(31);
+      color: DEBUG_VIEW_CONFIG.labelColor,
+      backgroundColor: DEBUG_VIEW_CONFIG.labelBackground,
+      padding: { x: DEBUG_VIEW_CONFIG.labelPaddingX, y: DEBUG_VIEW_CONFIG.labelPaddingY },
+    }).setDepth(DEBUG_VIEW_CONFIG.labelDepth);
     this.drawGameOverDebugLine();
   }
 
   drawGameOverDebugLine() {
     if (!DEBUG_GAME_OVER_LINE || !this.gameOverDebugGraphics || !this.gameOverDebugLabel) return;
     this.gameOverDebugGraphics.clear();
-    this.gameOverDebugGraphics.lineStyle(2, 0xff4968, 0.95);
+    this.gameOverDebugGraphics.lineStyle(
+      DEBUG_VIEW_CONFIG.lineWidth,
+      DEBUG_VIEW_CONFIG.lineColor,
+      DEBUG_VIEW_CONFIG.lineAlpha,
+    );
     this.gameOverDebugGraphics.lineBetween(0, this.gameOverLineY, GAME_WIDTH, this.gameOverLineY);
-    this.gameOverDebugLabel.setPosition(12, this.gameOverLineY - 27);
+    this.gameOverDebugLabel.setPosition(
+      DEBUG_VIEW_CONFIG.labelX,
+      this.gameOverLineY - DEBUG_VIEW_CONFIG.labelDrawOffsetY,
+    );
   }
 
   createInvisibleBounds() {
     this.boundBodies.forEach((body) => this.matter.world.remove(body));
-    const sideOptions = { isStatic: true, friction: 0.08, frictionStatic: 0.05, restitution: 0.02, label: 'wall' };
-    const surfaceOptions = { isStatic: true, friction: 0.08, frictionStatic: 0.04, restitution: 0, label: 'surface' };
+    const sideOptions = {
+      isStatic: true,
+      friction: PHYSICS_CONFIG.wallFriction,
+      frictionStatic: PHYSICS_CONFIG.wallStaticFriction,
+      restitution: PHYSICS_CONFIG.restitution,
+      label: 'wall',
+    };
+    const surfaceOptions = {
+      isStatic: true,
+      friction: PHYSICS_CONFIG.wallFriction,
+      frictionStatic: PHYSICS_CONFIG.surfaceStaticFriction,
+      restitution: 0,
+      label: 'surface',
+    };
     this.boundBodies = [
       this.matter.add.rectangle(WALL_SIZE / 2, gameHeight / 2, WALL_SIZE, gameHeight, sideOptions),
       this.matter.add.rectangle(GAME_WIDTH - WALL_SIZE / 2, gameHeight / 2, WALL_SIZE, gameHeight, sideOptions),
@@ -460,8 +701,13 @@ class FruitScene extends Phaser.Scene {
     this.recalculateGameOverLine();
   }
 
+  // ======================== Создание рыб ========================
+
   randomStartingLevel() {
-    const availableLevels = Math.min(STARTING_LEVELS + this.unlockedLevels.size - 1, 3);
+    const availableLevels = Math.min(
+      STARTING_LEVELS + this.unlockedLevels.size - 1,
+      SCENE_CONFIG.maximumStartingLevelCount,
+    );
     return Phaser.Math.Between(0, availableLevels - 1);
   }
 
@@ -493,24 +739,43 @@ class FruitScene extends Phaser.Scene {
     if (hasTexture) {
       visual = this.add.image(x, y, config.textureKey)
         .setOrigin(config.originX, config.originY)
-        .setDepth(4);
+        .setDepth(FISH_VISUAL_CONFIG.imageDepth);
       // Основное тело занимает bodyRatio ширины PNG; хвост остаётся вне коллайдера.
       const targetImageWidth = (config.radius * 2) / config.bodyRatio;
       baseVisualScale = targetImageWidth / visual.width;
       visual.setScale(baseVisualScale);
     } else {
       visual = this.add.circle(x, y, config.radius, config.color)
-        .setStrokeStyle(4, 0xffffff, 0.58)
-        .setDepth(3);
-      shine = this.add.ellipse(x - config.radius * 0.28, y - config.radius * 0.3,
-        config.radius * 0.42, config.radius * 0.2, 0xffffff, 0.48).setDepth(4);
+        .setStrokeStyle(
+          FISH_VISUAL_CONFIG.fallbackStrokeWidth,
+          0xffffff,
+          FISH_VISUAL_CONFIG.fallbackStrokeAlpha,
+        )
+        .setDepth(FISH_VISUAL_CONFIG.fallbackCircleDepth);
+      shine = this.add.ellipse(
+        x - config.radius * FISH_VISUAL_CONFIG.shineOffsetX,
+        y - config.radius * FISH_VISUAL_CONFIG.shineOffsetY,
+        config.radius * FISH_VISUAL_CONFIG.shineWidthRatio,
+        config.radius * FISH_VISUAL_CONFIG.shineHeightRatio,
+        0xffffff,
+        FISH_VISUAL_CONFIG.shineAlpha,
+      ).setDepth(FISH_VISUAL_CONFIG.imageDepth);
       label = this.add.text(x, y, String(config.level), {
         fontFamily: 'Nunito, sans-serif',
-        fontSize: `${Math.max(24, config.radius * 0.78)}px`,
+        fontSize: `${Math.max(
+          FISH_VISUAL_CONFIG.labelMinimumSize,
+          config.radius * FISH_VISUAL_CONFIG.labelSizeRatio,
+        )}px`,
         fontStyle: '900',
         color: '#ffffff',
-        shadow: { offsetX: 0, offsetY: 3, color: '#00699d', blur: 5, fill: true },
-      }).setOrigin(0.5).setDepth(5);
+        shadow: {
+          offsetX: 0,
+          offsetY: FISH_VISUAL_CONFIG.labelShadowOffsetY,
+          color: FISH_VISUAL_CONFIG.labelShadowColor,
+          blur: FISH_VISUAL_CONFIG.labelShadowBlur,
+          fill: true,
+        },
+      }).setOrigin(NUMBER_FORMAT_CONFIG.normalizedCenter).setDepth(FISH_VISUAL_CONFIG.labelDepth);
     }
 
     const fruit = {
@@ -525,8 +790,8 @@ class FruitScene extends Phaser.Scene {
       merging: false,
       removed: false,
       bornAt: this.time.now,
-      wobbleSeed: Math.random() * Math.PI * 2,
-      lastBubbleAt: this.time.now + Phaser.Math.Between(0, 300),
+      wobbleSeed: Math.random() * NUMBER_FORMAT_CONFIG.fullCircle,
+      lastBubbleAt: this.time.now + Phaser.Math.Between(0, FISH_VISUAL_CONFIG.initialBubbleDelayMax),
     };
     if (!isHeld) this.activateFruitPhysics(fruit);
     return fruit;
@@ -534,15 +799,21 @@ class FruitScene extends Phaser.Scene {
 
   activateFruitPhysics(fruit) {
     const config = FRUITS[fruit.level];
-    const collider = this.add.circle(fruit.visual.x, fruit.visual.y, config.radius, 0xffffff, 0).setDepth(2);
+    const collider = this.add.circle(
+      fruit.visual.x,
+      fruit.visual.y,
+      config.radius,
+      0xffffff,
+      0,
+    ).setDepth(FISH_VISUAL_CONFIG.colliderDepth);
 
     this.matter.add.gameObject(collider, {
       shape: { type: 'circle', radius: config.radius },
-      restitution: 0.02,
-      friction: 0.08,
-      frictionStatic: 0.05,
+      restitution: PHYSICS_CONFIG.restitution,
+      friction: PHYSICS_CONFIG.wallFriction,
+      frictionStatic: PHYSICS_CONFIG.wallStaticFriction,
       frictionAir: GAMEPLAY.waterDrag,
-      density: 0.0018,
+      density: PHYSICS_CONFIG.fishDensity,
       label: `fish-${fruit.level}`,
     });
 
@@ -554,18 +825,26 @@ class FruitScene extends Phaser.Scene {
   }
 
   syncFruitVisual(fruit, time) {
-    const motionFactor = Phaser.Math.Clamp(fruit.physics.body.speed / 1.4, 0, 1);
+    const motionFactor = Phaser.Math.Clamp(fruit.physics.body.speed / FISH_VISUAL_CONFIG.wobbleSpeedDivisor, 0, 1);
     const contactFactor = this.touchingSurface.has(fruit.physics.body.id) ? 0 : 1;
-    const wobble = Math.sin(time * 0.0022 + fruit.wobbleSeed) * 0.025 * motionFactor * contactFactor;
+    const wobble = Math.sin(time * FISH_VISUAL_CONFIG.wobbleTimeFactor + fruit.wobbleSeed)
+      * FISH_VISUAL_CONFIG.wobbleAmplitude
+      * motionFactor
+      * contactFactor;
     const x = fruit.physics.x;
     const y = fruit.physics.y;
     const rotation = fruit.physics.rotation + wobble;
     const radius = FRUITS[fruit.level].radius;
 
     fruit.visual.setPosition(x, y).setRotation(rotation);
-    fruit.label?.setPosition(x, y).setRotation(rotation * 0.25);
-    fruit.shine?.setPosition(x - radius * 0.28, y - radius * 0.3).setRotation(rotation);
+    fruit.label?.setPosition(x, y).setRotation(rotation * FISH_VISUAL_CONFIG.labelRotationFactor);
+    fruit.shine?.setPosition(
+      x - radius * FISH_VISUAL_CONFIG.shineOffsetX,
+      y - radius * FISH_VISUAL_CONFIG.shineOffsetY,
+    ).setRotation(rotation);
   }
+
+  // ======================== Управление текущей рыбой ========================
 
   isPointerOnReleasedFruit(pointer) {
     if (!Number.isFinite(pointer.worldX) || !Number.isFinite(pointer.worldY)) return false;
@@ -607,8 +886,11 @@ class FruitScene extends Phaser.Scene {
     this.lastDragX = x;
     this.currentFruit.visual.setPosition(x, spawnY());
     this.currentFruit.label?.setPosition(x, spawnY());
-    this.currentFruit.shine?.setPosition(x - radius * 0.28, spawnY() - radius * 0.3);
-    this.drawGuide(x, radius);
+    this.currentFruit.shine?.setPosition(
+      x - radius * FISH_VISUAL_CONFIG.shineOffsetX,
+      spawnY() - radius * FISH_VISUAL_CONFIG.shineOffsetY,
+    );
+    this.drawGuide(x);
   }
 
   dragCurrentFruit(pointer) {
@@ -619,10 +901,11 @@ class FruitScene extends Phaser.Scene {
     this.positionCurrentFruit(pointer.worldX + this.dragOffsetX);
   }
 
-  drawGuide(x, radius) {
+  // Вертикальная линия наведения не участвует в физике.
+  drawGuide(x) {
     this.guide.clear();
-    this.guide.lineStyle(2, 0xffffff, 0.22);
-    this.guide.lineBetween(x, spawnY(), x, SURFACE_Y + 26);
+    this.guide.lineStyle(GUIDE_CONFIG.width, GUIDE_CONFIG.color, GUIDE_CONFIG.alpha);
+    this.guide.lineBetween(x, spawnY(), x, SURFACE_Y + GUIDE_CONFIG.surfaceOffset);
     this.guide.setVisible(true);
   }
 
@@ -640,7 +923,10 @@ class FruitScene extends Phaser.Scene {
     this.canDrop = false;
     this.guide.setVisible(false);
     this.activateFruitPhysics(this.currentFruit);
-    this.currentFruit.physics.setVelocity(0, -0.35 * GAMEPLAY.riseSpeedMultiplier);
+    this.currentFruit.physics.setVelocity(
+      0,
+      PHYSICS_CONFIG.releaseVelocityY * GAMEPLAY.riseSpeedMultiplier,
+    );
     this.currentFruit = null;
     if (!hasCompletedFirstDrop) {
       hasCompletedFirstDrop = true;
@@ -659,6 +945,8 @@ class FruitScene extends Phaser.Scene {
     this.dragOffsetX = 0;
     if (this.currentFruit) this.positionCurrentFruit(this.lastDragX);
   }
+
+  // ======================== Столкновения и объединение ========================
 
   handleCollisions(event) {
     if (this.gameEnded || this.isPaused) return;
@@ -723,70 +1011,122 @@ class FruitScene extends Phaser.Scene {
 
     const newLevel = first.level + 1;
     const merged = this.createFruit(x, y, newLevel);
-    merged.physics.setVelocity(velocityX * 0.45, Math.min(velocityY, -0.8));
+    merged.physics.setVelocity(
+      velocityX * EFFECTS_CONFIG.mergeVelocityRetentionX,
+      Math.min(velocityY, EFFECTS_CONFIG.mergeMinimumRiseVelocity),
+    );
 
     // Bounce применяется только к визуалу, круглый физический коллайдер не масштабируется.
     [merged.visual, merged.shine, merged.label].filter(Boolean).forEach((target) => {
       const targetScale = target === merged.visual ? merged.baseVisualScale : 1;
-      target.setScale(targetScale * 0.72);
-      this.tweens.add({ targets: target, scale: targetScale, duration: 250, ease: 'Back.Out' });
+      target.setScale(targetScale * EFFECTS_CONFIG.mergeBounceStartScale);
+      this.tweens.add({
+        targets: target,
+        scale: targetScale,
+        duration: EFFECTS_CONFIG.mergeBounceDuration,
+        ease: 'Back.Out',
+      });
     });
 
     this.unlockLevel(newLevel);
   }
 
+  // ======================== Эффекты ========================
+
   addMergeEffects(x, y, color, points) {
-    const ring = this.add.circle(x, y, 18, 0xffffff, 0).setStrokeStyle(4, 0xd9faff, 0.85).setDepth(9);
+    const ring = this.add.circle(x, y, EFFECTS_CONFIG.ringRadius, 0xffffff, 0)
+      .setStrokeStyle(EFFECTS_CONFIG.ringStrokeWidth, EFFECTS_CONFIG.ringColor, EFFECTS_CONFIG.ringAlpha)
+      .setDepth(EFFECTS_CONFIG.ringDepth);
     this.tweens.add({
       targets: ring,
-      scale: 3.2,
+      scale: EFFECTS_CONFIG.ringEndScale,
       alpha: 0,
-      duration: 420,
+      duration: EFFECTS_CONFIG.ringDuration,
       ease: 'Cubic.Out',
       onComplete: () => ring.destroy(),
     });
 
-    for (let i = 0; i < 10; i += 1) {
-      const angle = (Math.PI * 2 * i) / 10;
-      const dot = this.add.circle(x, y, Phaser.Math.Between(3, 6), i % 2 ? 0xffffff : color, 0.85).setDepth(10);
+    for (let index = 0; index < EFFECTS_CONFIG.mergeBubbleCount; index += 1) {
+      const angle = (NUMBER_FORMAT_CONFIG.fullCircle * index) / EFFECTS_CONFIG.mergeBubbleCount;
+      const bubble = this.add.circle(
+        x,
+        y,
+        Phaser.Math.Between(EFFECTS_CONFIG.mergeBubbleMinRadius, EFFECTS_CONFIG.mergeBubbleMaxRadius),
+        index % 2 ? 0xffffff : color,
+        EFFECTS_CONFIG.mergeBubbleAlpha,
+      ).setDepth(EFFECTS_CONFIG.mergeBubbleDepth);
       this.tweens.add({
-        targets: dot,
-        x: x + Math.cos(angle) * Phaser.Math.Between(35, 57),
-        y: y + Math.sin(angle) * Phaser.Math.Between(35, 57) - 9,
+        targets: bubble,
+        x: x + Math.cos(angle) * Phaser.Math.Between(
+          EFFECTS_CONFIG.mergeBubbleMinDistance,
+          EFFECTS_CONFIG.mergeBubbleMaxDistance,
+        ),
+        y: y + Math.sin(angle) * Phaser.Math.Between(
+          EFFECTS_CONFIG.mergeBubbleMinDistance,
+          EFFECTS_CONFIG.mergeBubbleMaxDistance,
+        ) - EFFECTS_CONFIG.mergeBubbleRiseOffset,
         alpha: 0,
-        scale: 0.25,
-        duration: Phaser.Math.Between(300, 460),
+        scale: EFFECTS_CONFIG.mergeBubbleEndScale,
+        duration: Phaser.Math.Between(
+          EFFECTS_CONFIG.mergeBubbleMinDuration,
+          EFFECTS_CONFIG.mergeBubbleMaxDuration,
+        ),
         ease: 'Cubic.Out',
-        onComplete: () => dot.destroy(),
+        onComplete: () => bubble.destroy(),
       });
     }
 
-    const pointsText = this.add.text(x, y - 20, `+${points}`, {
-      fontFamily: 'Nunito, sans-serif', fontSize: '22px', fontStyle: '900', color: '#ffffff',
-      shadow: { offsetX: 0, offsetY: 3, color: '#00639b', blur: 6, fill: true },
-    }).setOrigin(0.5).setDepth(11);
-    this.tweens.add({ targets: pointsText, y: y - 76, alpha: 0, duration: 650, ease: 'Cubic.Out', onComplete: () => pointsText.destroy() });
+    const pointsText = this.add.text(x, y - EFFECTS_CONFIG.pointsOffsetY, `+${points}`, {
+      fontFamily: 'Nunito, sans-serif',
+      fontSize: `${EFFECTS_CONFIG.pointsFontSize}px`,
+      fontStyle: '900',
+      color: '#ffffff',
+      shadow: {
+        offsetX: 0,
+        offsetY: EFFECTS_CONFIG.pointsShadowOffsetY,
+        color: EFFECTS_CONFIG.pointsShadowColor,
+        blur: EFFECTS_CONFIG.pointsShadowBlur,
+        fill: true,
+      },
+    }).setOrigin(NUMBER_FORMAT_CONFIG.normalizedCenter).setDepth(EFFECTS_CONFIG.pointsDepth);
+    this.tweens.add({
+      targets: pointsText,
+      y: y - EFFECTS_CONFIG.pointsEndOffsetY,
+      alpha: 0,
+      duration: EFFECTS_CONFIG.pointsDuration,
+      ease: 'Cubic.Out',
+      onComplete: () => pointsText.destroy(),
+    });
   }
 
   createTrailBubble(fruit) {
     const radius = FRUITS[fruit.level].radius;
     const bubble = this.add.circle(
-      fruit.physics.x + Phaser.Math.Between(-Math.floor(radius * 0.25), Math.floor(radius * 0.25)),
-      fruit.physics.y + radius * 0.72,
-      Phaser.Math.Between(2, 5),
+      fruit.physics.x + Phaser.Math.Between(
+        -Math.floor(radius * EFFECTS_CONFIG.trailHorizontalRadiusRatio),
+        Math.floor(radius * EFFECTS_CONFIG.trailHorizontalRadiusRatio),
+      ),
+      fruit.physics.y + radius * EFFECTS_CONFIG.trailVerticalRadiusRatio,
+      Phaser.Math.Between(EFFECTS_CONFIG.trailMinRadius, EFFECTS_CONFIG.trailMaxRadius),
       0xffffff,
-      0.4,
-    ).setStrokeStyle(1, 0xffffff, 0.5).setDepth(2);
+      EFFECTS_CONFIG.trailAlpha,
+    ).setStrokeStyle(
+      EFFECTS_CONFIG.trailStrokeWidth,
+      0xffffff,
+      EFFECTS_CONFIG.trailStrokeAlpha,
+    ).setDepth(EFFECTS_CONFIG.trailDepth);
     this.tweens.add({
       targets: bubble,
-      y: bubble.y - Phaser.Math.Between(25, 48),
-      x: bubble.x + Phaser.Math.Between(-8, 8),
+      y: bubble.y - Phaser.Math.Between(EFFECTS_CONFIG.trailMinRise, EFFECTS_CONFIG.trailMaxRise),
+      x: bubble.x + Phaser.Math.Between(-EFFECTS_CONFIG.trailHorizontalDrift, EFFECTS_CONFIG.trailHorizontalDrift),
       alpha: 0,
-      scale: 0.5,
-      duration: Phaser.Math.Between(550, 800),
+      scale: EFFECTS_CONFIG.trailEndScale,
+      duration: Phaser.Math.Between(EFFECTS_CONFIG.trailMinDuration, EFFECTS_CONFIG.trailMaxDuration),
       onComplete: () => bubble.destroy(),
     });
   }
+
+  // ======================== Открытие уровней ========================
 
   unlockLevel(levelIndex) {
     if (this.unlockedLevels.has(levelIndex)) return;
@@ -794,16 +1134,21 @@ class FruitScene extends Phaser.Scene {
     const slot = ui.progressSlots[levelIndex];
     this.renderProgressSlot(levelIndex, true);
 
-    for (let i = 0; i < 5; i += 1) {
+    for (let index = 0; index < EFFECTS_CONFIG.unlockBubbleCount; index += 1) {
       const bubble = document.createElement('i');
       bubble.className = 'unlock-bubble';
-      bubble.style.left = `${32 + i * 9}%`;
-      bubble.style.bottom = '10%';
-      bubble.style.setProperty('--bubble-x', `${(i - 2) * 8}px`);
+      bubble.style.left = `${EFFECTS_CONFIG.unlockBubbleStartLeft + index * EFFECTS_CONFIG.unlockBubbleLeftStep}%`;
+      bubble.style.bottom = `${EFFECTS_CONFIG.unlockBubbleBottom}%`;
+      bubble.style.setProperty(
+        '--bubble-x',
+        `${(index - EFFECTS_CONFIG.unlockBubbleCenterIndex) * EFFECTS_CONFIG.unlockBubbleDriftStep}px`,
+      );
       slot.appendChild(bubble);
-      window.setTimeout(() => bubble.remove(), 750);
+      window.setTimeout(() => bubble.remove(), EFFECTS_CONFIG.unlockBubbleDuration);
     }
   }
+
+  // ======================== Физика и игровой цикл ========================
 
   removeFruit(fruit) {
     if (!fruit?.physics?.body || fruit.removed) return;
@@ -834,10 +1179,11 @@ class FruitScene extends Phaser.Scene {
     if (this.touchingSurface.has(body.id)) buoyancyFactor = 0;
 
     // В плотной почти неподвижной куче дополнительное давление вверх почти исчезает.
-    const isStableUpperPile = fruit.physics.y < SURFACE_Y + 260 && body.speed < 0.16;
+    const isStableUpperPile = fruit.physics.y < SURFACE_Y + PHYSICS_CONFIG.stablePileDistance
+      && body.speed < PHYSICS_CONFIG.stablePileSpeed;
     if (isStableUpperPile) buoyancyFactor = 0;
 
-    if (buoyancyFactor > 0.01) {
+    if (buoyancyFactor > PHYSICS_CONFIG.minimumBuoyancyFactor) {
       fruit.physics.applyForce({
         x: 0,
         y: GAMEPLAY.buoyancyForce * GAMEPLAY.riseSpeedMultiplier * body.mass * buoyancyFactor,
@@ -845,7 +1191,7 @@ class FruitScene extends Phaser.Scene {
     }
 
     // Мягкое затухание вращения без ручного изменения позиции или угла body.
-    if (Math.abs(body.angularVelocity) > 0.0005) {
+    if (Math.abs(body.angularVelocity) > PHYSICS_CONFIG.minimumAngularVelocity) {
       fruit.physics.setAngularVelocity(body.angularVelocity * GAMEPLAY.angularDamping);
     }
   }
@@ -876,11 +1222,18 @@ class FruitScene extends Phaser.Scene {
       if (fruit.physics.body.velocity.y < -maximumRiseSpeed) {
         fruit.physics.setVelocityY(-maximumRiseSpeed);
       }
-      if (Math.abs(fruit.physics.body.velocity.x) > 3.2) {
-        fruit.physics.setVelocityX(Phaser.Math.Clamp(fruit.physics.body.velocity.x, -3.2, 3.2));
+      if (Math.abs(fruit.physics.body.velocity.x) > PHYSICS_CONFIG.maximumHorizontalSpeed) {
+        fruit.physics.setVelocityX(Phaser.Math.Clamp(
+          fruit.physics.body.velocity.x,
+          -PHYSICS_CONFIG.maximumHorizontalSpeed,
+          PHYSICS_CONFIG.maximumHorizontalSpeed,
+        ));
       }
 
-      if (fruit.physics.body.velocity.y < -0.45 && time - fruit.lastBubbleAt > 430 + fruit.level * 45) {
+      const trailInterval = TIMING_CONFIG.trailBubbleBaseInterval
+        + fruit.level * TIMING_CONFIG.trailBubbleLevelInterval;
+      if (fruit.physics.body.velocity.y < PHYSICS_CONFIG.trailMinimumRiseSpeed
+        && time - fruit.lastBubbleAt > trailInterval) {
         fruit.lastBubbleAt = time;
         this.createTrailBubble(fruit);
       }
@@ -919,6 +1272,8 @@ class FruitScene extends Phaser.Scene {
       ui.gameWrap.dataset.qaBodyCount = String(this.fruits.size);
     }
   }
+
+  // ======================== Верхний интерфейс и состояния игры ========================
 
   updateNextPreview() {
     const next = FRUITS[this.nextLevel];
@@ -996,7 +1351,7 @@ const game = new Phaser.Game({
   width: GAME_WIDTH,
   height: gameHeight,
   transparent: true,
-  resolution: Math.min(window.devicePixelRatio || 1, 2),
+  resolution: Math.min(window.devicePixelRatio || 1, SCENE_CONFIG.maximumRenderResolution),
   render: {
     antialias: false,
     antialiasGL: false,
