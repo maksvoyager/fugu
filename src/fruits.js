@@ -9,6 +9,7 @@ export const FRUITS = [
   { level: 6, name: 'Фугу 6', radius: 81, color: 0x9a76ed, cssColor: '#9a76ed', points: 400, textureKey: 'fish-level-6', texturePath: './assets/fish/level6.png', bodyRatio: 0.70, originX: 0.527, originY: 0.496, progressScale: 0.99 },
   { level: 7, name: 'Фугу 7', radius: 98, color: 0xf04a3e, cssColor: '#f04a3e', points: 800, textureKey: 'fish-level-7', texturePath: './assets/fish/level7.png', bodyRatio: 0.78, originX: 0.508, originY: 0.493, progressScale: 0.94 },
   { level: 8, name: 'Фугу 8', radius: 117, color: 0x263b62, cssColor: '#263b62', points: 1600, textureKey: 'fish-level-8', texturePath: './assets/fish/level8.png', bodyRatio: 0.78, originX: 0.514, originY: 0.496, progressScale: 0.96 },
+  { level: 9, name: 'Фугу 9', radius: 137, color: 0x72aee8, cssColor: '#72aee8', points: 3200, textureKey: 'fish-level-9', texturePath: './assets/fish/level9.png', bodyRatio: 0.80, originX: 0.5, originY: 0.51, progressScale: 0.96 },
 ];
 
 // Эти параметры относятся только к миниатюрам нижней панели.
@@ -24,7 +25,7 @@ export const STARTING_LEVELS = 1;
 // ---------- Баланс, вода и Game Over ----------
 export const GAMEPLAY = {
   // Очки и максимальный уровень.
-  maxLevelMergeScore: 3200,
+  maxLevelMergeScore: 6400,
 
   // Скорость и сопротивление воды.
   riseSpeedMultiplier: 1.5,
