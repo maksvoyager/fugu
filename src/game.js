@@ -2,6 +2,31 @@ import { FRUITS, STARTING_LEVELS, GAMEPLAY, PROGRESS_UI } from './fruits.js';
 
 const Phaser = window.Phaser;
 
+// ---------- Анимация составной рыбы первого уровня ----------
+const FISH_ANIMATION = Object.freeze({
+  levelIndex: 0,
+  canvasSize: 512,
+  bodyTextureKey: 'fish-level-1-body',
+  bodyTexturePath: './assets/fish/animated/level1/body.png',
+  finTextureKey: 'fish-level-1-fin',
+  finTexturePath: './assets/fish/animated/level1/fin.png',
+  eyesClosedTextureKey: 'fish-level-1-eyes-closed',
+  eyesClosedTexturePath: './assets/fish/animated/level1/eyes_closed.png',
+  
+  
+  // Точка крепления плавника к телу
+  finOriginX: 0.304,
+  finOriginY: 0.619,
+  finOffsetX: 0,
+  finOffsetY: 0,
+  // Верхнее положение плавника
+  finAngleUp: -6,
+  // Нижнее положение плавника
+  finAngleDown: 8,
+  // Время движения между крайними положениями
+  finDuration: 1600,
+});
+
 // ---------- Данные подводного атласа ----------
 const FISH_DATA = Object.freeze([
   Object.freeze({ level: 1, name: 'Пузырик', character: 'Добрый, наивный и любопытный.', description: 'Самый любопытный житель рифа. Верит, что каждый день приносит новое приключение.' }),
@@ -218,6 +243,7 @@ const EFFECTS_CONFIG = Object.freeze({
 const QA_CONFIG = Object.freeze({
   setupDelay: 120,
   mergeOffsetX: 62,
+  levelOneMergeOffsetX: 23,
   mergeY: 410,
   mergeVelocityX: 0.25,
   mergeVelocityY: -0.2,
@@ -272,6 +298,8 @@ const QA_PHYSICS_PILE = URL_OPTIONS.has('qaPhysicsPile');
 const QA_GAME_OVER = URL_OPTIONS.has('qaGameOver');
 const QA_PROGRESSION = URL_OPTIONS.has('qaProgression');
 const QA_AUDIO_EVENTS = URL_OPTIONS.has('qaAudioEvents');
+const QA_FISH_ANIMATION = URL_OPTIONS.has('qaFishAnimation');
+const QA_LEVEL_ONE_MERGE = URL_OPTIONS.has('qaLevelOneMerge');
 const QA_NEXT_LEVEL = Number.parseInt(
   URL_OPTIONS.get('qaNextLevel') || '',
   NUMBER_FORMAT_CONFIG.decimalRadix,
@@ -353,6 +381,7 @@ const ui = {
 
 const warnedProgressAssets = new Set();
 const warnedAtlasAssets = new Set();
+let warnedMissingLevelOneAnimation = false;
 // Флаг живёт до перезагрузки страницы и не сбрасывается при рестарте Phaser-сцены.
 let hasCompletedFirstDrop = false;
 
@@ -476,10 +505,11 @@ class FruitScene extends Phaser.Scene {
     this.handleAudioPageShow = null;
     this.hasWarnedSuspendedAudio = false;
     this.handleAssetLoadError = (file) => {
-      console.warn('[Audio] Failed to load asset:', file.key, file.src);
+      console.warn('[Ресурсы] Не удалось загрузить файл:', file.key, file.src);
     };
     this.recordSoundPlayed = false;
     this.gameOverSoundPlayed = false;
+    this.stoppedFishAnimationCount = 0;
   }
 
   preload() {
@@ -488,6 +518,9 @@ class FruitScene extends Phaser.Scene {
 
     // Все изображения из единой конфигурации загружаются заранее; при ошибке используется fallback-круг.
     FRUITS.forEach((config) => this.load.image(config.textureKey, config.texturePath));
+    this.load.image(FISH_ANIMATION.bodyTextureKey, FISH_ANIMATION.bodyTexturePath);
+    this.load.image(FISH_ANIMATION.finTextureKey, FISH_ANIMATION.finTexturePath);
+    this.load.image(FISH_ANIMATION.eyesClosedTextureKey, FISH_ANIMATION.eyesClosedTexturePath);
     // Универсальная закрытая рыба загружается один раз и переиспользуется во всех слотах.
     this.load.image(PROGRESS_UI.lockedTextureKey, PROGRESS_UI.lockedTexturePath);
     this.load.image(SEABED_TEXTURE_KEY, SEABED_TEXTURE_PATH);
@@ -530,6 +563,7 @@ class FruitScene extends Phaser.Scene {
     this.ambientEnabled = readAmbientEnabled();
     this.recordSoundPlayed = false;
     this.gameOverSoundPlayed = false;
+    this.stoppedFishAnimationCount = 0;
 
     this.time.paused = false;
     this.matter.world.resume();
@@ -538,6 +572,15 @@ class FruitScene extends Phaser.Scene {
     FRUITS.forEach((config) => {
       if (this.textures.exists(config.textureKey)) {
         this.textures.get(config.textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+    });
+    [
+      FISH_ANIMATION.bodyTextureKey,
+      FISH_ANIMATION.finTextureKey,
+      FISH_ANIMATION.eyesClosedTextureKey,
+    ].forEach((textureKey) => {
+      if (this.textures.exists(textureKey)) {
+        this.textures.get(textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
       }
     });
     if (this.textures.exists(PROGRESS_UI.lockedTextureKey)) {
@@ -607,6 +650,7 @@ class FruitScene extends Phaser.Scene {
     if (QA_PHYSICS_PILE) this.setupPhysicsPileQa();
     if (QA_GAME_OVER) this.setupGameOverQa();
     if (QA_PROGRESSION) this.setupProgressionQa();
+    if (QA_LEVEL_ONE_MERGE) this.setupLevelOneMergeQa();
   }
 
   // ======================== Звуки ========================
@@ -1073,6 +1117,7 @@ class FruitScene extends Phaser.Scene {
     if (this.atlasWasRunning) {
       this.matter.world.pause();
       this.time.paused = true;
+      this.setFishPartAnimationsPaused(true);
     }
     this.renderAtlas();
     ui.atlasModal.hidden = false;
@@ -1086,6 +1131,7 @@ class FruitScene extends Phaser.Scene {
     if (this.atlasWasRunning && !this.isPaused && !this.gameEnded) {
       this.time.paused = false;
       this.matter.world.resume();
+      this.setFishPartAnimationsPaused(false);
       if (this.currentFruit?.isHeld) this.positionCurrentFruit(this.lastDragX);
     }
     this.atlasWasRunning = false;
@@ -1156,6 +1202,23 @@ class FruitScene extends Phaser.Scene {
     this.time.delayedCall(QA_CONFIG.setupDelay, () => {
       const left = this.createFruit(GAME_WIDTH / 2 - QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, MAX_LEVEL_INDEX);
       const right = this.createFruit(GAME_WIDTH / 2 + QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, MAX_LEVEL_INDEX);
+      left.physics.setVelocity(QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
+      right.physics.setVelocity(-QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
+    });
+  }
+
+  setupLevelOneMergeQa() {
+    this.time.delayedCall(QA_CONFIG.setupDelay, () => {
+      const left = this.createFruit(
+        GAME_WIDTH / 2 - QA_CONFIG.levelOneMergeOffsetX,
+        QA_CONFIG.mergeY,
+        FISH_ANIMATION.levelIndex,
+      );
+      const right = this.createFruit(
+        GAME_WIDTH / 2 + QA_CONFIG.levelOneMergeOffsetX,
+        QA_CONFIG.mergeY,
+        FISH_ANIMATION.levelIndex,
+      );
       left.physics.setVelocity(QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
       right.physics.setVelocity(-QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
     });
@@ -1381,17 +1444,149 @@ class FruitScene extends Phaser.Scene {
     this.positionCurrentFruit(this.lastDragX);
   }
 
+  hasLevelOneAnimationTextures() {
+    const requiredTextures = [
+      FISH_ANIMATION.bodyTextureKey,
+      FISH_ANIMATION.finTextureKey,
+      FISH_ANIMATION.eyesClosedTextureKey,
+    ];
+    const hasEveryTexture = requiredTextures.every((textureKey) => this.textures.exists(textureKey));
+    if (!hasEveryTexture && !warnedMissingLevelOneAnimation) {
+      warnedMissingLevelOneAnimation = true;
+      console.warn(
+        '[Анимация level1] Не все слои body.png, fin.png и eyes_closed.png загружены. Используется обычный assets/fish/level1.png.',
+      );
+    }
+    return hasEveryTexture;
+  }
+
+  createLevelOneAnimatedVisual(x, y, config) {
+    const body = this.add.image(0, 0, FISH_ANIMATION.bodyTextureKey)
+      .setOrigin(config.originX, config.originY);
+    const fin = this.add.image(0, 0, FISH_ANIMATION.finTextureKey)
+      .setOrigin(FISH_ANIMATION.finOriginX, FISH_ANIMATION.finOriginY);
+    const eyesClosed = this.add.image(0, 0, FISH_ANIMATION.eyesClosedTextureKey)
+      .setOrigin(config.originX, config.originY)
+      .setVisible(false);
+
+    // Компенсация origin сохраняет совмещение холстов при нулевом угле плавника.
+    const finCanvasWidth = fin.width || FISH_ANIMATION.canvasSize;
+    const finCanvasHeight = fin.height || FISH_ANIMATION.canvasSize;
+    fin.setPosition(
+      (FISH_ANIMATION.finOriginX - config.originX) * finCanvasWidth + FISH_ANIMATION.finOffsetX,
+      (FISH_ANIMATION.finOriginY - config.originY) * finCanvasHeight + FISH_ANIMATION.finOffsetY,
+    );
+
+    const visual = this.add.container(x, y, [body, fin, eyesClosed])
+      .setDepth(FISH_VISUAL_CONFIG.imageDepth);
+    const targetImageWidth = (config.radius * 2) / config.bodyRatio;
+    const baseVisualScale = targetImageWidth / body.width;
+    visual.setScale(baseVisualScale);
+
+    return { visual, body, fin, eyesClosed, baseVisualScale };
+  }
+
+  scheduleFruitAnimationCall(fruit, delay, callback) {
+    if (fruit.removed) return null;
+    let timer = null;
+    timer = this.time.delayedCall(delay, () => {
+      fruit.animationTimers.delete(timer);
+      if (!fruit.removed) callback();
+    });
+    fruit.animationTimers.add(timer);
+    return timer;
+  }
+
+  scheduleNextBlink(fruit) {
+    if (!fruit.eyesClosed || fruit.removed) return;
+    const delay = Phaser.Math.Between(
+      FISH_ANIMATION.blinkMinDelay,
+      FISH_ANIMATION.blinkMaxDelay,
+    );
+    this.scheduleFruitAnimationCall(fruit, delay, () => this.runBlink(fruit));
+  }
+
+  runBlink(fruit) {
+    if (!fruit.eyesClosed || fruit.removed) return;
+    fruit.eyesClosed.setVisible(true);
+    const useDoubleBlink = Math.random() < FISH_ANIMATION.doubleBlinkChance;
+
+    this.scheduleFruitAnimationCall(fruit, FISH_ANIMATION.blinkDuration, () => {
+      fruit.eyesClosed.setVisible(false);
+      if (!useDoubleBlink) {
+        this.scheduleNextBlink(fruit);
+        return;
+      }
+
+      const openDelay = Phaser.Math.Between(
+        FISH_ANIMATION.doubleBlinkOpenMinDelay,
+        FISH_ANIMATION.doubleBlinkOpenMaxDelay,
+      );
+      this.scheduleFruitAnimationCall(fruit, openDelay, () => {
+        fruit.eyesClosed.setVisible(true);
+        this.scheduleFruitAnimationCall(fruit, FISH_ANIMATION.doubleBlinkDuration, () => {
+          fruit.eyesClosed.setVisible(false);
+          this.scheduleNextBlink(fruit);
+        });
+      });
+    });
+  }
+
+  startFruitPartAnimation(fruit) {
+    if (!fruit.fin || !fruit.eyesClosed) return;
+    if (fruit.finTween) return;
+
+    // Один непрерывный tween изменяет только локальный угол плавника.
+    fruit.fin.setAngle(FISH_ANIMATION.finAngleUp);
+    fruit.finTween = this.tweens.add({
+      targets: fruit.fin,
+      angle: FISH_ANIMATION.finAngleDown,
+      duration: FISH_ANIMATION.finDuration,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.scheduleNextBlink(fruit);
+  }
+
+  stopFruitPartAnimation(fruit) {
+    if (fruit.finTween || fruit.animationTimers?.size) this.stoppedFishAnimationCount += 1;
+    fruit.finTween?.stop();
+    fruit.finTween?.remove();
+    fruit.finTween = null;
+    fruit.animationTimers?.forEach((timer) => timer.remove(false));
+    fruit.animationTimers?.clear();
+  }
+
+  setFishPartAnimationsPaused(value) {
+    const animatedFruits = new Set(this.fruits.values());
+    if (this.currentFruit) animatedFruits.add(this.currentFruit);
+    animatedFruits.forEach((fruit) => {
+      if (!fruit.finTween) return;
+      if (value) fruit.finTween.pause();
+      else fruit.finTween.resume();
+    });
+  }
+
   createFruit(x, y, level, isHeld = false) {
     const config = FRUITS[level];
 
     // visual и label не участвуют в физике: позже visual можно заменить изображением рыбки.
+    const usesAnimatedLevelOne = level === FISH_ANIMATION.levelIndex
+      && this.hasLevelOneAnimationTextures();
     const hasTexture = this.textures.exists(config.textureKey);
     let visual;
     let shine = null;
     let label = null;
     let baseVisualScale = 1;
+    let body = null;
+    let fin = null;
+    let eyesClosed = null;
 
-    if (hasTexture) {
+    if (usesAnimatedLevelOne) {
+      const animatedVisual = this.createLevelOneAnimatedVisual(x, y, config);
+      ({ visual, body, fin, eyesClosed, baseVisualScale } = animatedVisual);
+    } else if (hasTexture) {
       visual = this.add.image(x, y, config.textureKey)
         .setOrigin(config.originX, config.originY)
         .setDepth(FISH_VISUAL_CONFIG.imageDepth);
@@ -1438,7 +1633,12 @@ class FruitScene extends Phaser.Scene {
       shine,
       label,
       baseVisualScale,
-      usesTexture: hasTexture,
+      usesTexture: usesAnimatedLevelOne || hasTexture,
+      body,
+      fin,
+      eyesClosed,
+      finTween: null,
+      animationTimers: new Set(),
       physics: null,
       level,
       isHeld,
@@ -1448,6 +1648,7 @@ class FruitScene extends Phaser.Scene {
       wobbleSeed: Math.random() * NUMBER_FORMAT_CONFIG.fullCircle,
       lastBubbleAt: this.time.now + Phaser.Math.Between(0, FISH_VISUAL_CONFIG.initialBubbleDelayMax),
     };
+    if (usesAnimatedLevelOne) this.startFruitPartAnimation(fruit);
     if (!isHeld) this.activateFruitPhysics(fruit);
     return fruit;
   }
@@ -1824,6 +2025,7 @@ class FruitScene extends Phaser.Scene {
   removeFruit(fruit) {
     if (!fruit?.physics?.body || fruit.removed) return;
     fruit.removed = true;
+    this.stopFruitPartAnimation(fruit);
     const bodyId = fruit.physics.body.id;
     this.fruits.delete(bodyId);
     this.dangerSince.delete(bodyId);
@@ -1942,6 +2144,21 @@ class FruitScene extends Phaser.Scene {
       ui.gameWrap.dataset.qaSleepingBodies = String(qaSleepingBodies);
       ui.gameWrap.dataset.qaBodyCount = String(this.fruits.size);
     }
+    if (QA_FISH_ANIMATION) {
+      const animatedFruits = new Set([...this.fruits.values()].filter((fruit) => fruit.fin));
+      if (this.currentFruit?.fin) animatedFruits.add(this.currentFruit);
+      const [animatedFruit] = animatedFruits;
+      ui.gameWrap.dataset.qaAnimatedLevelOne = String(Boolean(animatedFruit));
+      ui.gameWrap.dataset.qaAnimatedFishCount = String(animatedFruits.size);
+      ui.gameWrap.dataset.qaFinAngle = animatedFruit ? animatedFruit.fin.angle.toFixed(3) : '';
+      ui.gameWrap.dataset.qaEyesClosed = animatedFruit
+        ? String(animatedFruit.eyesClosed.visible)
+        : '';
+      ui.gameWrap.dataset.qaAnimationTimerCount = String(
+        [...animatedFruits].reduce((timerCount, fruit) => timerCount + fruit.animationTimers.size, 0),
+      );
+      ui.gameWrap.dataset.qaStoppedFishAnimationCount = String(this.stoppedFishAnimationCount);
+    }
   }
 
   // ======================== Верхний интерфейс и состояния игры ========================
@@ -1976,6 +2193,7 @@ class FruitScene extends Phaser.Scene {
       this.matter.world.resume();
       if (this.currentFruit?.isHeld) this.positionCurrentFruit(this.lastDragX);
     }
+    this.setFishPartAnimationsPaused(value);
     this.startAmbient();
   }
 
