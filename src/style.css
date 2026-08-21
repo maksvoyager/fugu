@@ -117,6 +117,15 @@ button { font: inherit; }
   isolation: isolate;
 }
 
+.game-wrap.world-jellyfish {
+  background:
+    radial-gradient(ellipse at 50% 5%, rgba(95, 121, 255, .24), transparent 37%),
+    radial-gradient(circle at 20% 48%, rgba(181, 108, 255, .09), transparent 31%),
+    linear-gradient(180deg, #101c52 0%, #07163e 43%, #040a25 100%);
+}
+.game-wrap.world-jellyfish .water-rays { opacity: .28; filter: hue-rotate(42deg); }
+.game-wrap.world-jellyfish .ambient-bubbles { opacity: .55; }
+
 #game-container,
 #game-container canvas {
   position: absolute;
@@ -180,9 +189,7 @@ button { font: inherit; }
   position: relative;
   overflow: hidden;
   border: 1.5px solid rgba(255,255,255,.62);
-  background:
-    radial-gradient(circle at 18% 10%, rgba(255,255,255,.55), transparent 26%),
-    linear-gradient(145deg, rgba(218,249,255,.32), rgba(99,193,235,.18));
+  background: linear-gradient(145deg, rgba(218,249,255,.32), rgba(99,193,235,.18));
   box-shadow:
     inset 0 2px 3px rgba(255,255,255,.48),
     inset 0 -10px 20px rgba(4,95,171,.12),
@@ -190,20 +197,6 @@ button { font: inherit; }
     0 0 14px rgba(192,241,255,.12);
   backdrop-filter: blur(7px);
   -webkit-backdrop-filter: blur(7px);
-}
-
-.bubble-panel::before,
-.bubble-button::before {
-  content: '';
-  position: absolute;
-  top: 7%;
-  left: 10%;
-  width: 38%;
-  height: 18%;
-  border-radius: 50%;
-  background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,0));
-  filter: blur(1px);
-  pointer-events: none;
 }
 
 .hud-stat {
@@ -450,6 +443,39 @@ button { font: inherit; }
   text-align: center;
   animation: modal-in var(--modal-animation-duration) cubic-bezier(.2,.85,.25,1.15);
 }
+.main-menu { z-index: 45; background: rgba(1, 31, 72, .34); }
+.main-menu-card h1 { margin: 7px 0 10px; font-size: clamp(27px, 8vw, 38px); line-height: .95; }
+.main-menu-world { margin: 0 0 20px; font-weight: 900; opacity: .86; }
+.worlds-modal { z-index: 90; background: rgba(0, 18, 56, .72); }
+.worlds-card {
+  position: relative;
+  width: min(100%, 480px);
+  max-height: 100%;
+  padding: 24px 16px 18px;
+  overflow: auto;
+  border-radius: 36px;
+  text-align: center;
+}
+.worlds-card h2 { margin-bottom: 14px; }
+.worlds-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.world-card {
+  display: flex;
+  min-width: 0;
+  padding: 12px 9px;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 28px;
+  background: rgba(42, 135, 200, .15);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,.22);
+}
+.world-card.is-selected { border-color: rgba(151,244,255,.86); background: rgba(74,190,231,.24); }
+.world-card img { width: min(112px, 28vw); height: 92px; object-fit: contain; filter: drop-shadow(0 8px 10px rgba(0,21,65,.36)); }
+.world-card h3 { margin: 4px 0; font-size: 16px; line-height: 1.05; }
+.world-card p { min-height: 48px; margin: 0; font-size: 10px; line-height: 1.2; opacity: .78; }
+.world-card-progress { margin-top: 7px; font-size: 10px; font-weight: 900; }
+.world-card .modal-button { margin-top: 8px; padding: 9px 8px; font-size: 10px; }
+.world-card .modal-button:disabled { opacity: .66; cursor: default; }
 .modal-kicker { font-size: var(--modal-kicker-font-size); font-weight: 900; letter-spacing: .14em; opacity: .72; }
 .modal h2 { margin: 5px 0 22px; font-size: var(--modal-title-font-size); line-height: 1; text-shadow: 0 3px 9px rgba(0,58,112,.35); }
 .modal-button {
@@ -523,6 +549,9 @@ button { font: inherit; }
 .atlas-card::-webkit-scrollbar { display: none; }
 .atlas-card .modal-kicker { display: block; padding: 0 38px; }
 .atlas-card h2 { margin: 3px 0 12px; font-size: clamp(21px, 7vw, 30px); }
+.atlas-world-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 0 0 10px; }
+.atlas-world-tab { padding: 8px 5px; border-radius: 999px; font-size: 10px; font-weight: 900; }
+.atlas-world-tab.is-selected { background: rgba(129,238,255,.42); border-color: rgba(255,255,255,.86); }
 .modal-close-button {
   position: absolute;
   z-index: 3;
@@ -626,6 +655,14 @@ button { font: inherit; }
   margin: 0 0 7px;
   font-size: 14px;
   font-weight: 900;
+}
+
+@media (max-width: 360px) {
+  .worlds-grid { grid-template-columns: 1fr; }
+  .world-card { display: grid; grid-template-columns: 74px 1fr; column-gap: 8px; text-align: left; }
+  .world-card img { grid-row: 1 / 5; width: 74px; height: 78px; }
+  .world-card h3, .world-card p, .world-card-progress, .world-card .modal-button { grid-column: 2; }
+  .world-card h3, .world-card p { min-height: 0; }
 }
 .fish-detail-description {
   margin: 0 0 18px;

@@ -1,4 +1,14 @@
-import { FRUITS, STARTING_LEVELS, GAMEPLAY, PROGRESS_UI } from './fruits.js';
+import { STARTING_LEVELS, GAMEPLAY, PROGRESS_UI } from './fruits.js';
+import {
+  WORLDS,
+  LEGACY_COLLECTION_KEY,
+  LEGACY_BEST_SCORE_KEY,
+  readSelectedWorldId,
+  saveSelectedWorldId,
+  collectionStorageKey,
+  bestScoreStorageKey,
+  highestLevelStorageKey,
+} from './worlds.js';
 
 const Phaser = window.Phaser;
 
@@ -21,13 +31,18 @@ const FISH_ANIMATION = Object.freeze({
 });
 
 // ---------- Данные подводного атласа ----------
-// ---------- Редкие силуэты в глубине: акула и косяк рыб ----------
+let activeWorldId = readSelectedWorldId();
+let activeWorld = WORLDS[activeWorldId];
+let FRUITS = activeWorld.characters;
+let FISH_DATA = FRUITS;
+let startSceneWithoutMainMenu = false;
+
+const GLOW_SPHERE_TEXTURE_KEY = 'jellyfish-glow-sphere';
+const GLOW_SPHERE_TEXTURE_PATH = './assets/effects/glow_sphere.svg';
+
+// ---------- Редкие силуэты в глубине ----------
 const SHARK_CONFIG = Object.freeze({
   enabled: true,
-  variants: Object.freeze([
-    Object.freeze({ id: 'shark', textureKey: 'shark-shadow', texturePath: './assets/backgrounds/shark_shadow.png' }),
-    Object.freeze({ id: 'fish-school', textureKey: 'fish-shadow', texturePath: './assets/backgrounds/fish_shadow.png' }),
-  ]),
   depth: 0.75,
   baseWidthRatio: 0.72,
   checkInterval: 20000,
@@ -49,23 +64,9 @@ const SHARK_CONFIG = Object.freeze({
   edgeRevealRatio: 0.08,
 });
 
-const FISH_DATA = Object.freeze([
-  Object.freeze({ level: 1, name: 'Пузырик', character: 'Добрый, наивный и любопытный.', description: 'Самый любопытный житель рифа. Верит, что каждый день приносит новое приключение.' }),
-  Object.freeze({ level: 2, name: 'Лучик', character: 'Осторожный мечтатель.', description: 'Сначала внимательно посмотрит, а уже потом решится подплыть поближе.' }),
-  Object.freeze({ level: 3, name: 'Хитрюша', character: 'Самоуверенный наблюдатель.', description: 'Всегда делает вид, что заранее знал, чем всё закончится.' }),
-  Object.freeze({ level: 4, name: 'Спайк', character: 'Суровый, но заботливый защитник.', description: 'Если рядом опасность — первым встанет на защиту всей стаи.' }),
-  Object.freeze({ level: 5, name: 'Шалун', character: 'Весёлый проказник.', description: 'Никогда не упустит возможность поднять настроение соседям.' }),
-  Object.freeze({ level: 6, name: 'Удивляшка', character: 'Вечно чем-то поражён.', description: 'Каждый день для него — настоящее открытие.' }),
-  Object.freeze({ level: 7, name: 'Лео', character: 'Громкий весельчак и душа компании.', description: 'Если слышен весёлый смех — скорее всего, это Лео снова придумал что-то забавное.' }),
-  Object.freeze({ level: 8, name: 'Соня', character: 'Спокойный сонный философ.', description: 'Пока остальные суетятся, Соня спокойно досматривает очередной сон.' }),
-  Object.freeze({ level: 9, name: 'Плакса', character: 'Очень чувствительный и добросердечный.', description: 'Самый чувствительный житель океана. Переживает по любому поводу, но никогда не теряет доброго сердца.' }),
-]);
-
 const ATLAS_CONFIG = Object.freeze({
-  storageKey: 'fugu-merge-collection-levels',
-  questionFishPath: './assets/fish/locked_fish.png',
   lockedName: '???',
-  lockedDescription: 'Создайте предыдущий уровень, чтобы открыть эту рыбу.',
+  lockedDescription: '',
   unlockDismissDelay: 1500,
   unlockAutoCloseDelay: 3000,
 });
@@ -305,15 +306,11 @@ const NUMBER_FORMAT_CONFIG = Object.freeze({
 const GAME_WIDTH = SCENE_CONFIG.width;
 const WALL_SIZE = SCENE_CONFIG.wallSize;
 const SURFACE_Y = SCENE_CONFIG.surfaceY;
-const SEABED_TEXTURE_KEY = 'bottom-seabed';
-const SEABED_TEXTURE_PATH = './assets/backgrounds/bottom_seabed.png';
-const WATER_SURFACE_TEXTURE_KEY = 'water-surface';
-const WATER_SURFACE_TEXTURE_PATH = './assets/backgrounds/water_surface.png';
-const BEST_SCORE_KEY = 'fugu-merge-best-score';
 const SOUND_ENABLED_KEY = 'fugu-merge-sound-enabled';
 const AMBIENT_ENABLED_KEY = 'fugu-merge-ambient-enabled';
 const URL_OPTIONS = new URLSearchParams(window.location.search);
 const DEBUG_PHYSICS = URL_OPTIONS.has('debugPhysics');
+const DEBUG_DISABLE_WORLD_GLOW = URL_OPTIONS.has('debugDisableGlow');
 const QA_MAX_MERGE = URL_OPTIONS.has('qaMaxMerge');
 const QA_CREATE_MAX_LEVEL = URL_OPTIONS.has('qaCreateMaxLevel');
 const QA_PHYSICS_PILE = URL_OPTIONS.has('qaPhysicsPile');
@@ -334,7 +331,8 @@ const QA_NEXT_PREVIEW_LEVEL = Number.parseInt(
   NUMBER_FORMAT_CONFIG.decimalRadix,
 ) - 1;
 const DEBUG_GAME_OVER_LINE = URL_OPTIONS.has('debugGameOverLine');
-const MAX_LEVEL_INDEX = FRUITS.length - 1;
+const QA_MODE = [...URL_OPTIONS.keys()].some((key) => key.startsWith('qa'));
+const maxLevelIndex = () => FRUITS.length - 1;
 const CONTROL_STATES = Object.freeze({
   WAITING: 'waiting',
   DRAGGING: 'dragging',
@@ -359,13 +357,19 @@ let gameHeight = calculateGameHeight();
 const spawnY = () => gameHeight - SCENE_CONFIG.spawnBottomOffset;
 
 const progressionElement = document.querySelector('#progression');
-FRUITS.forEach((config, index) => {
-  const slot = document.createElement('div');
-  slot.className = `progress-slot${index === 0 ? ' is-unlocked' : ''}`;
-  slot.dataset.level = String(config.level);
-  slot.setAttribute('aria-label', `Уровень ${config.level} ${index === 0 ? 'открыт' : 'закрыт'}`);
-  progressionElement.appendChild(slot);
-});
+
+function rebuildProgressionSlots() {
+  progressionElement.replaceChildren();
+  FRUITS.forEach((config, index) => {
+    const slot = document.createElement('div');
+    slot.className = `progress-slot${index === 0 ? ' is-unlocked' : ''}`;
+    slot.dataset.level = String(config.level);
+    slot.setAttribute('aria-label', `Уровень ${config.level} ${index === 0 ? 'открыт' : 'закрыт'}`);
+    progressionElement.appendChild(slot);
+  });
+}
+
+rebuildProgressionSlots();
 
 const ui = {
   gameWrap: document.querySelector('#game-wrap'),
@@ -374,6 +378,13 @@ const ui = {
   nextFish: document.querySelector('#next-fruit'),
   controlHint: document.querySelector('#control-hint'),
   warning: document.querySelector('#warning'),
+  mainMenu: document.querySelector('#main-menu'),
+  mainMenuWorld: document.querySelector('#main-menu-world'),
+  playButton: document.querySelector('#play-button'),
+  worldsButton: document.querySelector('#worlds-button'),
+  worldsModal: document.querySelector('#worlds-modal'),
+  worldsCloseButton: document.querySelector('#worlds-close-button'),
+  worldsGrid: document.querySelector('#worlds-grid'),
   pauseButton: document.querySelector('#pause-button'),
   pauseModal: document.querySelector('#pause-modal'),
   continueButton: document.querySelector('#continue-button'),
@@ -382,14 +393,16 @@ const ui = {
   ambientToggleButton: document.querySelector('#ambient-toggle-button'),
   ambientToggleText: document.querySelector('#ambient-toggle-text'),
   pauseRestartButton: document.querySelector('#pause-restart-button'),
+  pauseWorldsButton: document.querySelector('#pause-worlds-button'),
   gameOver: document.querySelector('#game-over'),
   finalScore: document.querySelector('#final-score'),
   bestScore: document.querySelector('#best-score'),
   restartButton: document.querySelector('#restart-button'),
   progression: progressionElement,
-  progressSlots: [...document.querySelectorAll('.progress-slot')],
+  progressSlots: [...progressionElement.querySelectorAll('.progress-slot')],
   atlasModal: document.querySelector('#atlas-modal'),
   atlasGrid: document.querySelector('#atlas-grid'),
+  atlasWorldTabs: document.querySelector('#atlas-world-tabs'),
   atlasCloseButton: document.querySelector('#atlas-close-button'),
   fishDetailModal: document.querySelector('#fish-detail-modal'),
   fishDetailImage: document.querySelector('#fish-detail-image'),
@@ -413,7 +426,15 @@ let hasCompletedFirstDrop = false;
 
 function readBestScore() {
   try {
-    return Number(localStorage.getItem(BEST_SCORE_KEY)) || 0;
+    const worldKey = bestScoreStorageKey(activeWorldId);
+    const saved = localStorage.getItem(worldKey);
+    if (saved !== null) return Number(saved) || 0;
+    // Миграция прежнего общего рекорда в мир фугу.
+    const legacy = activeWorldId === 'fugu'
+      ? Number(localStorage.getItem(LEGACY_BEST_SCORE_KEY)) || 0
+      : 0;
+    if (legacy) localStorage.setItem(worldKey, String(legacy));
+    return legacy;
   } catch {
     return 0;
   }
@@ -421,7 +442,7 @@ function readBestScore() {
 
 function saveBestScore(value) {
   try {
-    localStorage.setItem(BEST_SCORE_KEY, String(value));
+    localStorage.setItem(bestScoreStorageKey(activeWorldId), String(value));
   } catch {
     // Игра продолжит работать, даже если браузер запретил локальное хранилище.
   }
@@ -461,24 +482,30 @@ function saveAmbientEnabled(value) {
   }
 }
 
-function readCollectionLevels() {
+function readCollectionLevels(world = activeWorld) {
   try {
-    const savedLevels = JSON.parse(localStorage.getItem(ATLAS_CONFIG.storageKey) || '[]');
+    const worldKey = collectionStorageKey(world.id);
+    let raw = localStorage.getItem(worldKey);
+    if (raw === null && world.id === 'fugu') raw = localStorage.getItem(LEGACY_COLLECTION_KEY);
+    const savedLevels = JSON.parse(raw || '[]');
     const validLevels = Array.isArray(savedLevels)
-      ? savedLevels.filter((level) => Number.isInteger(level) && level >= 1 && level <= FISH_DATA.length)
+      ? savedLevels.filter((level) => Number.isInteger(level) && level >= 1 && level <= world.characters.length)
       : [];
-    return new Set([0, ...validLevels.map((level) => level - 1)]);
+    const levels = new Set([0, ...validLevels.map((level) => level - 1)]);
+    if (raw !== null) saveCollectionLevels(levels, world.id);
+    return levels;
   } catch {
     return new Set([0]);
   }
 }
 
-function saveCollectionLevels(levelIndexes) {
+function saveCollectionLevels(levelIndexes, worldId = activeWorldId) {
   try {
     const savedLevels = [...levelIndexes]
       .sort((firstLevel, secondLevel) => firstLevel - secondLevel)
       .map((levelIndex) => levelIndex + 1);
-    localStorage.setItem(ATLAS_CONFIG.storageKey, JSON.stringify(savedLevels));
+    localStorage.setItem(collectionStorageKey(worldId), JSON.stringify(savedLevels));
+    localStorage.setItem(highestLevelStorageKey(worldId), String(Math.max(...savedLevels, 1)));
   } catch {
     // Игра и атлас продолжат работать, даже если браузер запретил localStorage.
   }
@@ -489,6 +516,8 @@ class FruitScene extends Phaser.Scene {
 
   constructor() {
     super('FruitScene');
+    this.world = activeWorld;
+    this.atlasWorldId = activeWorldId;
     this.fruits = new Map();
     this.dangerSince = new Map();
     this.touchingSurface = new Set();
@@ -524,6 +553,7 @@ class FruitScene extends Phaser.Scene {
     this.lastDragX = GAME_WIDTH / 2;
     this.gameEnded = false;
     this.isPaused = false;
+    this.isMainMenuOpen = true;
     this.sounds = null;
     this.ambientSound = null;
     this.ambientTween = null;
@@ -542,6 +572,9 @@ class FruitScene extends Phaser.Scene {
     this.recordSoundPlayed = false;
     this.gameOverSoundPlayed = false;
     this.stoppedBlinkAnimationCount = 0;
+    ui.gameWrap.dataset.world = activeWorldId;
+    ui.gameWrap.classList.remove('world-fugu', 'world-jellyfish');
+    ui.gameWrap.classList.add(activeWorld.themeClass);
   }
 
   preload() {
@@ -549,21 +582,28 @@ class FruitScene extends Phaser.Scene {
     this.load.on('loaderror', this.handleAssetLoadError);
 
     // Все изображения из единой конфигурации загружаются заранее; при ошибке используется fallback-круг.
-    FRUITS.forEach((config) => this.load.image(config.textureKey, config.texturePath));
+    Object.values(WORLDS).forEach((world) => {
+      world.characters.forEach((config) => {
+        this.load.image(config.textureKey, config.texturePath);
+      });
+      this.load.image(world.backgrounds.seabedKey, world.backgrounds.seabedPath);
+      this.load.image(world.backgrounds.surfaceKey, world.backgrounds.surfacePath);
+      world.backgroundEvents.forEach((variant) => {
+        this.load.image(variant.textureKey, variant.texturePath);
+      });
+    });
+    this.load.svg(GLOW_SPHERE_TEXTURE_KEY, GLOW_SPHERE_TEXTURE_PATH, { width: 256, height: 256 });
     this.load.image(FISH_ANIMATION.bodyTextureKey, FISH_ANIMATION.bodyTexturePath);
     this.load.image(FISH_ANIMATION.eyesClosedTextureKey, FISH_ANIMATION.eyesClosedTexturePath);
     // Универсальная закрытая рыба загружается один раз и переиспользуется во всех слотах.
-    this.load.image(PROGRESS_UI.lockedTextureKey, PROGRESS_UI.lockedTexturePath);
-    this.load.image(SEABED_TEXTURE_KEY, SEABED_TEXTURE_PATH);
-    this.load.image(WATER_SURFACE_TEXTURE_KEY, WATER_SURFACE_TEXTURE_PATH);
-    SHARK_CONFIG.variants.forEach((variant) => {
-      this.load.image(variant.textureKey, variant.texturePath);
-    });
+    this.load.image(activeWorld.lockedTextureKey, activeWorld.lockedTexturePath);
     Object.values(AUDIO.files).forEach(({ key, path }) => this.load.audio(key, path));
     this.load.audio(AUDIO.ambientKey, AUDIO.ambientPath);
   }
 
   create() {
+    this.world = activeWorld;
+    this.atlasWorldId = activeWorldId;
     this.fruits = new Map();
     this.dangerSince = new Map();
     this.touchingSurface = new Set();
@@ -599,21 +639,28 @@ class FruitScene extends Phaser.Scene {
     this.lastDragX = GAME_WIDTH / 2;
     this.gameEnded = false;
     this.isPaused = false;
+    this.isMainMenuOpen = true;
     this.soundEnabled = readSoundEnabled();
     this.ambientEnabled = readAmbientEnabled();
     this.recordSoundPlayed = false;
     this.gameOverSoundPlayed = false;
     this.stoppedBlinkAnimationCount = 0;
+    ui.gameWrap.dataset.world = activeWorldId;
+    ui.gameWrap.classList.remove('world-fugu', 'world-jellyfish');
+    ui.gameWrap.classList.add(activeWorld.themeClass);
 
     this.time.paused = false;
     this.matter.world.resume();
     this.initializeSounds();
     this.installAudioUnlock();
-    FRUITS.forEach((config) => {
+    Object.values(WORLDS).forEach((world) => world.characters.forEach((config) => {
       if (this.textures.exists(config.textureKey)) {
         this.textures.get(config.textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
       }
-    });
+    }));
+    if (this.textures.exists(GLOW_SPHERE_TEXTURE_KEY)) {
+      this.textures.get(GLOW_SPHERE_TEXTURE_KEY).setFilter(Phaser.Textures.FilterMode.LINEAR);
+    }
     [
       FISH_ANIMATION.bodyTextureKey,
       FISH_ANIMATION.eyesClosedTextureKey,
@@ -622,12 +669,12 @@ class FruitScene extends Phaser.Scene {
         this.textures.get(textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
       }
     });
-    if (this.textures.exists(PROGRESS_UI.lockedTextureKey)) {
-      this.textures.get(PROGRESS_UI.lockedTextureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    if (this.textures.exists(activeWorld.lockedTextureKey)) {
+      this.textures.get(activeWorld.lockedTextureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
     } else {
       this.warnProgressAssetOnce(
-        PROGRESS_UI.lockedTextureKey,
-        `Не удалось загрузить ${PROGRESS_UI.lockedTexturePath}. Используется запасной тёмно-синий круг со знаком вопроса.`,
+        activeWorld.lockedTextureKey,
+        `Не удалось загрузить ${activeWorld.lockedTexturePath}. Используется запасной тёмно-синий круг со знаком вопроса.`,
       );
     }
     this.resetInterface();
@@ -646,6 +693,7 @@ class FruitScene extends Phaser.Scene {
     window.addEventListener('touchcancel', this.handlePointerCancel, { passive: false });
     window.addEventListener('blur', this.handleWindowBlur);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.disposeWorldCharacterEffectsForShutdown();
       this.scale.off('resize', this.handleGameResize, this);
       window.removeEventListener('pointerup', this.handleWindowPointerUp);
       window.removeEventListener('pointercancel', this.handlePointerCancel);
@@ -692,6 +740,12 @@ class FruitScene extends Phaser.Scene {
     if (QA_GAME_OVER) this.setupGameOverQa();
     if (QA_PROGRESSION) this.setupProgressionQa();
     if (QA_LEVEL_ONE_MERGE) this.setupLevelOneMergeQa();
+    if (QA_MODE || startSceneWithoutMainMenu) {
+      startSceneWithoutMainMenu = false;
+      this.closeMainMenu();
+    } else {
+      this.openMainMenu();
+    }
   }
 
   // ======================== Звуки ========================
@@ -708,8 +762,9 @@ class FruitScene extends Phaser.Scene {
         ]),
       );
     }
-    if (!this.ambientSound && this.cache.audio.exists(AUDIO.ambientKey)) {
-      this.ambientSound = this.sound.add(AUDIO.ambientKey, {
+    const ambientKey = this.world.ambientSound || AUDIO.ambientKey;
+    if (!this.ambientSound && this.cache.audio.exists(ambientKey)) {
+      this.ambientSound = this.sound.add(ambientKey, {
         loop: true,
         volume: 0,
       });
@@ -1057,14 +1112,14 @@ class FruitScene extends Phaser.Scene {
         this.warnProgressAssetOnce(config.textureKey, `Не удалось показать ${config.texturePath}. Для уровня ${config.level} используется цветной круг.`);
         visual.replaceWith(this.createProgressFallback(config, false));
       }, { once: true });
-    } else if (!isUnlocked && this.textures.exists(PROGRESS_UI.lockedTextureKey)) {
+    } else if (!isUnlocked && this.textures.exists(this.world.lockedTextureKey)) {
       visual = this.createProgressImage(
-        PROGRESS_UI.lockedTexturePath,
+        this.world.lockedTexturePath,
         `Закрытая рыба уровня ${config.level}`,
         PROGRESS_UI.lockedFishScale,
       );
       visual.addEventListener('error', () => {
-        this.warnProgressAssetOnce(PROGRESS_UI.lockedTextureKey, `Не удалось показать ${PROGRESS_UI.lockedTexturePath}. Используется запасной тёмно-синий круг со знаком вопроса.`);
+        this.warnProgressAssetOnce(this.world.lockedTextureKey, `Не удалось показать ${this.world.lockedTexturePath}. Используется запасной тёмно-синий круг со знаком вопроса.`);
         visual.replaceWith(this.createProgressFallback(config, true));
       }, { once: true });
     } else {
@@ -1111,9 +1166,25 @@ class FruitScene extends Phaser.Scene {
 
   renderAtlas() {
     ui.atlasGrid.replaceChildren();
+    ui.atlasWorldTabs.replaceChildren();
+    const atlasWorld = WORLDS[this.atlasWorldId] || this.world;
+    const atlasCollection = readCollectionLevels(atlasWorld);
 
-    FISH_DATA.forEach((fishData, levelIndex) => {
-      const isUnlocked = this.collectionUnlockedLevels.has(levelIndex);
+    Object.values(WORLDS).forEach((world) => {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = `atlas-world-tab bubble-button${world.id === atlasWorld.id ? ' is-selected' : ''}`;
+      tab.textContent = world.name;
+      tab.addEventListener('click', () => {
+        this.playSound('button');
+        this.atlasWorldId = world.id;
+        this.renderAtlas();
+      });
+      ui.atlasWorldTabs.appendChild(tab);
+    });
+
+    atlasWorld.characters.forEach((fishData, levelIndex) => {
+      const isUnlocked = atlasCollection.has(levelIndex);
       const card = document.createElement('button');
       card.type = 'button';
       card.className = `atlas-fish-card${isUnlocked ? ' is-unlocked' : ' is-locked'}`;
@@ -1129,11 +1200,11 @@ class FruitScene extends Phaser.Scene {
       imageWrap.className = 'atlas-fish-image-wrap';
       const image = document.createElement('img');
       image.className = 'atlas-fish-image';
-      const imagePath = isUnlocked ? FRUITS[levelIndex].texturePath : ATLAS_CONFIG.questionFishPath;
+      const imagePath = isUnlocked ? fishData.texturePath : atlasWorld.lockedTexturePath;
       this.configureAtlasImage(
         image,
         imagePath,
-        ATLAS_CONFIG.questionFishPath,
+        atlasWorld.lockedTexturePath,
         isUnlocked ? fishData.name : 'Неоткрытая рыба',
       );
       imageWrap.appendChild(image);
@@ -1154,10 +1225,12 @@ class FruitScene extends Phaser.Scene {
     if (!ui.atlasModal.hidden) return;
     this.playSound('button');
     this.cancelCurrentFruitDrag();
+    this.atlasWorldId = activeWorldId;
     this.atlasWasRunning = !this.isPaused && !this.gameEnded;
     if (this.atlasWasRunning) {
       this.matter.world.pause();
       this.time.paused = true;
+      this.setWorldCharacterAnimationsPaused(true);
       this.setSharkPaused(true);
     }
     this.renderAtlas();
@@ -1172,6 +1245,7 @@ class FruitScene extends Phaser.Scene {
     if (this.atlasWasRunning && !this.isPaused && !this.gameEnded) {
       this.time.paused = false;
       this.matter.world.resume();
+      this.setWorldCharacterAnimationsPaused(false);
       this.setSharkPaused(false);
       if (this.currentFruit?.isHeld) this.positionCurrentFruit(this.lastDragX);
     }
@@ -1179,13 +1253,15 @@ class FruitScene extends Phaser.Scene {
   }
 
   openFishDetail(levelIndex) {
-    const fishData = FISH_DATA[levelIndex];
-    if (!fishData || !this.collectionUnlockedLevels.has(levelIndex)) return;
+    const atlasWorld = WORLDS[this.atlasWorldId] || this.world;
+    const atlasCollection = readCollectionLevels(atlasWorld);
+    const fishData = atlasWorld.characters[levelIndex];
+    if (!fishData || !atlasCollection.has(levelIndex)) return;
     this.playSound('button');
     this.configureAtlasImage(
       ui.fishDetailImage,
-      FRUITS[levelIndex].texturePath,
-      ATLAS_CONFIG.questionFishPath,
+      fishData.texturePath,
+      atlasWorld.lockedTexturePath,
       fishData.name,
     );
     ui.fishDetailLevel.textContent = `УРОВЕНЬ ${fishData.level}`;
@@ -1210,7 +1286,7 @@ class FruitScene extends Phaser.Scene {
     this.configureAtlasImage(
       ui.fishUnlockImage,
       FRUITS[levelIndex].texturePath,
-      ATLAS_CONFIG.questionFishPath,
+      this.world.lockedTexturePath,
       fishData.name,
     );
     ui.fishUnlockName.textContent = fishData.name;
@@ -1241,8 +1317,8 @@ class FruitScene extends Phaser.Scene {
   setupMaxMergeQa() {
     this.unlockAllLevelsForQa();
     this.time.delayedCall(QA_CONFIG.setupDelay, () => {
-      const left = this.createFruit(GAME_WIDTH / 2 - QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, MAX_LEVEL_INDEX);
-      const right = this.createFruit(GAME_WIDTH / 2 + QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, MAX_LEVEL_INDEX);
+      const left = this.createFruit(GAME_WIDTH / 2 - QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, maxLevelIndex());
+      const right = this.createFruit(GAME_WIDTH / 2 + QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, maxLevelIndex());
       left.physics.setVelocity(QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
       right.physics.setVelocity(-QA_CONFIG.mergeVelocityX, QA_CONFIG.mergeVelocityY);
     });
@@ -1266,8 +1342,8 @@ class FruitScene extends Phaser.Scene {
   }
 
   setupCreateMaxLevelQa() {
-    const sourceLevel = MAX_LEVEL_INDEX - 1;
-    this.unlockedLevels = new Set(FRUITS.slice(0, MAX_LEVEL_INDEX).map((_, index) => index));
+    const sourceLevel = maxLevelIndex() - 1;
+    this.unlockedLevels = new Set(FRUITS.slice(0, maxLevelIndex()).map((_, index) => index));
     this.renderProgression();
     this.time.delayedCall(QA_CONFIG.setupDelay, () => {
       const left = this.createFruit(GAME_WIDTH / 2 - QA_CONFIG.mergeOffsetX, QA_CONFIG.mergeY, sourceLevel);
@@ -1318,10 +1394,11 @@ class FruitScene extends Phaser.Scene {
     const graphics = this.add.graphics().setDepth(BACKDROP_CONFIG.backgroundDepth);
 
     // Изображение поверхности — только декор; физический коллайдер остаётся отдельным и невидимым.
-    if (this.textures.exists(WATER_SURFACE_TEXTURE_KEY)) {
-      this.textures.get(WATER_SURFACE_TEXTURE_KEY).setFilter(Phaser.Textures.FilterMode.LINEAR);
+    const { backgrounds } = this.world;
+    if (this.textures.exists(backgrounds.surfaceKey)) {
+      this.textures.get(backgrounds.surfaceKey).setFilter(Phaser.Textures.FilterMode.LINEAR);
       const waterSurface = this.add
-        .image(GAME_WIDTH / 2, SURFACE_Y, WATER_SURFACE_TEXTURE_KEY)
+        .image(GAME_WIDTH / 2, SURFACE_Y, backgrounds.surfaceKey)
         .setOrigin(BACKDROP_CONFIG.surfaceOriginX, BACKDROP_CONFIG.surfaceOriginY)
         .setAlpha(BACKDROP_CONFIG.surfaceAlpha)
         .setDepth(BACKDROP_CONFIG.surfaceDepth);
@@ -1338,9 +1415,9 @@ class FruitScene extends Phaser.Scene {
 
     // Готовое изображение дна: масштабируется по ширине без искажения
     // и остаётся чисто декоративным (без физического тела Matter.js).
-    if (this.textures.exists(SEABED_TEXTURE_KEY)) {
+    if (this.textures.exists(backgrounds.seabedKey)) {
       this.seabed = this.add
-        .image(GAME_WIDTH / 2, gameHeight, SEABED_TEXTURE_KEY)
+        .image(GAME_WIDTH / 2, gameHeight, backgrounds.seabedKey)
         .setOrigin(BACKDROP_CONFIG.seabedOriginX, BACKDROP_CONFIG.seabedOriginY)
         .setDepth(BACKDROP_CONFIG.seabedDepth);
       this.seabed.setScale(GAME_WIDTH / this.seabed.width);
@@ -1358,7 +1435,7 @@ class FruitScene extends Phaser.Scene {
   startSharkCycle() {
     if (!SHARK_CONFIG.enabled) return;
 
-    this.availableDepthVariants = SHARK_CONFIG.variants.filter((variant) => {
+    this.availableDepthVariants = this.world.backgroundEvents.filter((variant) => {
       const isLoaded = this.textures.exists(variant.textureKey);
       if (!isLoaded && !warnedMissingDepthAssets.has(variant.textureKey)) {
         warnedMissingDepthAssets.add(variant.textureKey);
@@ -1765,7 +1842,8 @@ class FruitScene extends Phaser.Scene {
     const config = FRUITS[level];
 
     // visual и label не участвуют в физике: позже visual можно заменить изображением рыбки.
-    const usesAnimatedLevelOne = level === FISH_ANIMATION.levelIndex
+    const usesAnimatedLevelOne = config.animation === 'blink-level-1'
+      && level === FISH_ANIMATION.levelIndex
       && this.hasLevelOneAnimationTextures();
     const hasTexture = this.textures.exists(config.textureKey);
     let visual;
@@ -1829,6 +1907,9 @@ class FruitScene extends Phaser.Scene {
       body,
       eyesClosed,
       animationTimers: new Set(),
+      characterGlow: null,
+      ambientGlow: null,
+      glowTween: null,
       physics: null,
       level,
       isHeld,
@@ -1838,9 +1919,36 @@ class FruitScene extends Phaser.Scene {
       wobbleSeed: Math.random() * NUMBER_FORMAT_CONFIG.fullCircle,
       lastBubbleAt: this.time.now + Phaser.Math.Between(0, FISH_VISUAL_CONFIG.initialBubbleDelayMax),
     };
+    this.createWorldCharacterGlow(fruit, config);
     if (usesAnimatedLevelOne) this.startBlinkAnimation(fruit);
     if (!isHeld) this.activateFruitPhysics(fruit);
     return fruit;
+  }
+
+  createWorldCharacterGlow(fruit, config) {
+    const glowConfig = this.world.glow;
+    if (DEBUG_DISABLE_WORLD_GLOW || !glowConfig || !fruit.usesTexture || !config.glowColorNumber) return;
+
+    if (!this.textures.exists(GLOW_SPHERE_TEXTURE_KEY)) return;
+    const sphereDiameter = config.radius * 2 * glowConfig.sphereScale;
+    fruit.characterGlow = this.add.image(
+      fruit.visual.x,
+      fruit.visual.y,
+      GLOW_SPHERE_TEXTURE_KEY,
+    ).setDepth(FISH_VISUAL_CONFIG.imageDepth - 0.1)
+      .setTint(config.glowColorNumber)
+      .setAlpha(glowConfig.sphereAlpha)
+      .setDisplaySize(sphereDiameter, sphereDiameter);
+  }
+
+  setWorldCharacterAnimationsPaused(value) {
+    const characters = new Set(this.fruits.values());
+    if (this.currentFruit) characters.add(this.currentFruit);
+    characters.forEach((fruit) => {
+      if (!fruit.glowTween) return;
+      if (value) fruit.glowTween.pause();
+      else fruit.glowTween.resume();
+    });
   }
 
   activateFruitPhysics(fruit) {
@@ -1883,6 +1991,8 @@ class FruitScene extends Phaser.Scene {
     const radius = FRUITS[fruit.level].radius;
 
     fruit.visual.setPosition(x, y).setRotation(rotation);
+    fruit.characterGlow?.setPosition(x, y).setRotation(rotation);
+    fruit.ambientGlow?.setPosition(x, y);
     fruit.label?.setPosition(x, y).setRotation(rotation * FISH_VISUAL_CONFIG.labelRotationFactor);
     fruit.shine?.setPosition(
       x - radius * FISH_VISUAL_CONFIG.shineOffsetX,
@@ -1931,6 +2041,8 @@ class FruitScene extends Phaser.Scene {
     const x = Phaser.Math.Clamp(rawX, WALL_SIZE + radius, GAME_WIDTH - WALL_SIZE - radius);
     this.lastDragX = x;
     this.currentFruit.visual.setPosition(x, spawnY());
+    this.currentFruit.characterGlow?.setPosition(x, spawnY());
+    this.currentFruit.ambientGlow?.setPosition(x, spawnY());
     this.currentFruit.label?.setPosition(x, spawnY());
     this.currentFruit.shine?.setPosition(
       x - radius * FISH_VISUAL_CONFIG.shineOffsetX,
@@ -2034,9 +2146,9 @@ class FruitScene extends Phaser.Scene {
     const y = (first.physics.y + second.physics.y) / 2;
     const velocityX = (first.physics.body.velocity.x + second.physics.body.velocity.x) / 2;
     const velocityY = (first.physics.body.velocity.y + second.physics.body.velocity.y) / 2;
-    const isMaxLevelMerge = first.level === MAX_LEVEL_INDEX;
+    const isMaxLevelMerge = first.level === maxLevelIndex();
     const gainedPoints = isMaxLevelMerge
-      ? GAMEPLAY.maxLevelMergeScore
+      ? this.world.maxLevelMergeScore
       : FRUITS[first.level + 1].points;
     const effectColor = isMaxLevelMerge ? FRUITS[first.level].color : FRUITS[first.level + 1].color;
 
@@ -2088,6 +2200,7 @@ class FruitScene extends Phaser.Scene {
   // ======================== Эффекты ========================
 
   addMergeEffects(x, y, color, points) {
+    this.addWorldMergeFlash(x, y, color);
     const ring = this.add.circle(x, y, EFFECTS_CONFIG.ringRadius, 0xffffff, 0)
       .setStrokeStyle(EFFECTS_CONFIG.ringStrokeWidth, EFFECTS_CONFIG.ringColor, EFFECTS_CONFIG.ringAlpha)
       .setDepth(EFFECTS_CONFIG.ringDepth);
@@ -2153,6 +2266,40 @@ class FruitScene extends Phaser.Scene {
     });
   }
 
+  addWorldMergeFlash(x, y, color) {
+    const glowConfig = this.world.glow;
+    if (!glowConfig) return;
+
+    const flash = this.add.circle(x, y, EFFECTS_CONFIG.ringRadius, color, 0.18)
+      .setDepth(EFFECTS_CONFIG.ringDepth - 0.1)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: flash,
+      scale: glowConfig.mergeFlashScale,
+      alpha: 0,
+      duration: glowConfig.mergeFlashDuration,
+      ease: 'Sine.Out',
+      onComplete: () => flash.destroy(),
+    });
+
+    for (let index = 0; index < glowConfig.mergeParticleCount; index += 1) {
+      const angle = (NUMBER_FORMAT_CONFIG.fullCircle * index) / glowConfig.mergeParticleCount;
+      const particle = this.add.circle(x, y, 2.5, color, 0.46)
+        .setDepth(EFFECTS_CONFIG.mergeBubbleDepth)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * Phaser.Math.Between(24, 52),
+        y: y + Math.sin(angle) * Phaser.Math.Between(24, 52),
+        alpha: 0,
+        scale: 0.4,
+        duration: glowConfig.mergeFlashDuration,
+        ease: 'Cubic.Out',
+        onComplete: () => particle.destroy(),
+      });
+    }
+  }
+
   createTrailBubble(fruit) {
     const radius = FRUITS[fruit.level].radius;
     const bubble = this.add.circle(
@@ -2215,7 +2362,7 @@ class FruitScene extends Phaser.Scene {
   removeFruit(fruit) {
     if (!fruit?.physics?.body || fruit.removed) return;
     fruit.removed = true;
-    this.stopBlinkAnimation(fruit);
+    this.disposeWorldCharacterEffects(fruit);
     const bodyId = fruit.physics.body.id;
     this.fruits.delete(bodyId);
     this.dangerSince.delete(bodyId);
@@ -2224,6 +2371,26 @@ class FruitScene extends Phaser.Scene {
     fruit.shine?.destroy();
     fruit.visual.destroy();
     fruit.physics.destroy();
+  }
+
+  // Удаляем таймеры и glow одного персонажа при merge или уничтожении.
+  disposeWorldCharacterEffects(fruit) {
+    if (!fruit) return;
+    this.stopBlinkAnimation(fruit);
+    fruit.glowTween?.stop();
+    fruit.glowTween?.remove();
+    fruit.characterGlow?.destroy();
+    fruit.ambientGlow?.destroy();
+    fruit.glowTween = null;
+    fruit.characterGlow = null;
+    fruit.ambientGlow = null;
+  }
+
+  // При перезапуске сцены не оставляем бесконечные tweens и таймеры прошлого мира.
+  disposeWorldCharacterEffectsForShutdown() {
+    const characters = new Set(this.fruits?.values() || []);
+    if (this.currentFruit) characters.add(this.currentFruit);
+    characters.forEach((fruit) => this.disposeWorldCharacterEffects(fruit));
   }
 
   applyAdaptiveBuoyancy(fruit) {
@@ -2364,6 +2531,29 @@ class FruitScene extends Phaser.Scene {
     ui.nextFish.setAttribute('aria-label', `Следующая рыбка: уровень ${next.level}`);
   }
 
+  openMainMenu() {
+    this.isMainMenuOpen = true;
+    ui.mainMenuWorld.textContent = this.world.name;
+    ui.mainMenu.hidden = false;
+    this.cancelCurrentFruitDrag();
+    this.matter.world.pause();
+    this.time.paused = true;
+    this.setWorldCharacterAnimationsPaused(true);
+    this.setSharkPaused(true);
+  }
+
+  closeMainMenu() {
+    this.isMainMenuOpen = false;
+    ui.mainMenu.hidden = true;
+    if (this.gameEnded || this.isPaused) return;
+    this.time.paused = false;
+    this.matter.world.resume();
+    this.setWorldCharacterAnimationsPaused(false);
+    this.setSharkPaused(false);
+    if (this.currentFruit?.isHeld) this.positionCurrentFruit(this.lastDragX);
+    this.startAmbient();
+  }
+
   setPaused(value) {
     if (this.gameEnded || this.isPaused === value) return;
     if (value) this.cancelCurrentFruitDrag();
@@ -2383,6 +2573,7 @@ class FruitScene extends Phaser.Scene {
       if (this.currentFruit?.isHeld) this.positionCurrentFruit(this.lastDragX);
     }
     this.setSharkPaused(value);
+    this.setWorldCharacterAnimationsPaused(value);
     this.startAmbient();
   }
 
@@ -2427,6 +2618,7 @@ class FruitScene extends Phaser.Scene {
     ui.warning.classList.remove('is-visible');
     ui.gameWrap.classList.remove('is-danger');
     ui.pauseModal.hidden = true;
+    ui.worldsModal.hidden = true;
     ui.gameOver.hidden = true;
     ui.atlasModal.hidden = true;
     ui.fishDetailModal.hidden = true;
@@ -2485,10 +2677,67 @@ function activeScene() {
 function restartGame() {
   const scene = activeScene();
   scene.playSound('button');
+  startSceneWithoutMainMenu = true;
   scene.time.paused = false;
   scene.matter.world.resume();
   ui.pauseModal.hidden = true;
   ui.gameOver.hidden = true;
+  scene.scene.restart();
+}
+
+function renderWorldCards() {
+  ui.worldsGrid.replaceChildren();
+  Object.values(WORLDS).forEach((world) => {
+    const collection = readCollectionLevels(world);
+    const card = document.createElement('article');
+    card.className = `world-card${world.id === activeWorldId ? ' is-selected' : ''}`;
+    const preview = document.createElement('img');
+    preview.src = world.characters[world.previewCharacterLevel - 1].texturePath;
+    preview.alt = world.name;
+    const title = document.createElement('h3');
+    title.textContent = world.name;
+    const description = document.createElement('p');
+    description.textContent = world.menuDescription;
+    const progress = document.createElement('span');
+    progress.className = 'world-card-progress';
+    progress.textContent = `${collection.size} / ${world.characters.length} открыто`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'modal-button bubble-button';
+    button.textContent = world.id === activeWorldId ? 'Выбрано' : 'Выбрать';
+    button.disabled = world.id === activeWorldId;
+    button.addEventListener('click', () => selectWorld(world.id));
+    card.append(preview, title, description, progress, button);
+    ui.worldsGrid.appendChild(card);
+  });
+}
+
+function openWorldsModal() {
+  activeScene().playSound('button');
+  renderWorldCards();
+  ui.worldsModal.hidden = false;
+}
+
+function closeWorldsModal() {
+  ui.worldsModal.hidden = true;
+}
+
+function selectWorld(worldId) {
+  if (!WORLDS[worldId] || worldId === activeWorldId) return;
+  const scene = activeScene();
+  scene.playSound('button');
+  saveSelectedWorldId(worldId);
+  activeWorldId = worldId;
+  activeWorld = WORLDS[worldId];
+  FRUITS = activeWorld.characters;
+  FISH_DATA = FRUITS;
+  rebuildProgressionSlots();
+  ui.progressSlots = [...progressionElement.querySelectorAll('.progress-slot')];
+  closeWorldsModal();
+  ui.pauseModal.hidden = true;
+  ui.gameOver.hidden = true;
+  scene.time.paused = false;
+  scene.matter.world.resume();
   scene.scene.restart();
 }
 
@@ -2516,6 +2765,17 @@ ui.ambientToggleButton.addEventListener('click', () => {
 });
 ui.pauseRestartButton.addEventListener('click', restartGame);
 ui.restartButton.addEventListener('click', restartGame);
+ui.playButton.addEventListener('click', () => {
+  const scene = activeScene();
+  scene.playSound('button');
+  scene.closeMainMenu();
+});
+ui.worldsButton.addEventListener('click', openWorldsModal);
+ui.pauseWorldsButton.addEventListener('click', openWorldsModal);
+ui.worldsCloseButton.addEventListener('click', closeWorldsModal);
+ui.worldsModal.addEventListener('click', (event) => {
+  if (event.target === ui.worldsModal) closeWorldsModal();
+});
 
 ui.progression.addEventListener('click', (event) => {
   if (!event.target.closest('.progress-slot')) return;
@@ -2533,7 +2793,8 @@ ui.fishUnlockModal.addEventListener('click', () => activeScene().closeFishUnlock
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   const scene = activeScene();
-  if (!ui.fishDetailModal.hidden) scene.closeFishDetail();
+  if (!ui.worldsModal.hidden) closeWorldsModal();
+  else if (!ui.fishDetailModal.hidden) scene.closeFishDetail();
   else if (!ui.atlasModal.hidden) scene.closeAtlas();
 });
 
