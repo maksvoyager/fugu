@@ -69,6 +69,30 @@
   --danger-pulse-duration: 1s;
   --modal-animation-duration: .3s;
 
+  /* ---------- Liquid Glass design tokens ---------- */
+  --glass-bg: rgba(232, 250, 255, .105);
+  --glass-bg-strong: rgba(225, 248, 255, .17);
+  --glass-bg-tertiary: rgba(226, 248, 255, .075);
+  --glass-border: rgba(255, 255, 255, .27);
+  --glass-border-strong: rgba(255, 255, 255, .42);
+  --glass-highlight: rgba(255, 255, 255, .31);
+  --glass-lower-shade: rgba(4, 48, 93, .13);
+  --glass-blur: 18px;
+  --glass-blur-light: 10px;
+  --glass-saturation: 145%;
+  --glass-radius: 30px;
+  --glass-radius-small: 20px;
+  --glass-radius-pill: 999px;
+  --glass-shadow: 0 14px 38px rgba(0, 23, 66, .2);
+  --glass-shadow-soft: 0 8px 24px rgba(0, 31, 80, .14);
+  --glass-inner-highlight: inset 0 1px 0 rgba(255, 255, 255, .32);
+  --ui-accent-rgb: 91, 214, 255;
+  --ui-transition: 140ms;
+  --modal-open-duration: 220ms;
+  --modal-close-duration: 180ms;
+  --button-press-scale: .96;
+  --button-hover-scale: 1.02;
+
   font-family: 'Nunito', system-ui, sans-serif;
   color: #fff;
   background: #055b9d;
@@ -780,4 +804,202 @@ button { font: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* ========================================================================== */
+/* Liquid Glass UI                                                            */
+/* ========================================================================== */
+
+.game-wrap.world-fugu { --ui-accent-rgb: 86, 218, 255; }
+.game-wrap.world-jellyfish {
+  --ui-accent-rgb: 143, 137, 255;
+  --glass-bg: rgba(184, 207, 255, .105);
+  --glass-bg-strong: rgba(174, 199, 255, .17);
+  --glass-bg-tertiary: rgba(177, 194, 255, .075);
+  --glass-border: rgba(218, 229, 255, .3);
+  --glass-highlight: rgba(231, 235, 255, .36);
+}
+
+.glass {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  background-color: rgba(91, 157, 197, .24); /* fallback без backdrop-filter */
+  background-image: linear-gradient(180deg, var(--glass-bg), rgba(164, 211, 239, .055) 62%, var(--glass-lower-shade));
+  box-shadow: var(--glass-inner-highlight), var(--glass-shadow-soft);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  isolation: isolate;
+}
+
+.glass::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, var(--glass-highlight), rgba(255,255,255,.045) 34%, transparent 62%);
+  opacity: .52;
+  pointer-events: none;
+}
+
+.glass > * { position: relative; z-index: 1; }
+.glass > .modal-close-button { position: absolute; }
+.glass-strong { background-color: rgba(72, 133, 177, .34); background-image: linear-gradient(180deg, var(--glass-bg-strong), rgba(104, 170, 213, .08) 58%, rgba(5, 36, 78, .16)); box-shadow: var(--glass-inner-highlight), var(--glass-shadow); }
+.glass-tertiary { background-color: rgba(102, 170, 207, .2); background-image: linear-gradient(180deg, var(--glass-bg-tertiary), rgba(126, 188, 222, .045)); }
+.glass-panel { border-radius: var(--glass-radius); }
+
+.glass-button {
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  border-radius: var(--glass-radius-pill);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  letter-spacing: .045em;
+  text-shadow: 0 1px 5px rgba(0, 22, 61, .28);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--ui-transition) cubic-bezier(.2,.75,.25,1), filter var(--ui-transition) ease, border-color var(--ui-transition) ease, background-color var(--ui-transition) ease;
+}
+.glass-button-primary {
+  border-color: rgba(255,255,255,.48);
+  background-color: rgba(var(--ui-accent-rgb), .38);
+  background-image: linear-gradient(180deg, rgba(255,255,255,.22), rgba(var(--ui-accent-rgb), .18) 58%, rgba(3, 75, 130, .1));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 0 -8px 18px rgba(0,71,135,.12), 0 10px 28px rgba(var(--ui-accent-rgb), .2);
+}
+.glass-button-secondary { background-color: rgba(121, 187, 222, .24); }
+.glass-button-tertiary { background-color: rgba(123, 184, 216, .15); -webkit-backdrop-filter: blur(var(--glass-blur-light)) saturate(135%); backdrop-filter: blur(var(--glass-blur-light)) saturate(135%); }
+.glass-icon-button { width: 42px; height: 42px; min-width: 42px; min-height: 42px; padding: 0; border-radius: 50%; }
+.glass-button:active { transform: scale(var(--button-press-scale)); filter: brightness(.96); }
+.glass-button:focus-visible { outline: 2px solid rgba(255,255,255,.88); outline-offset: 3px; }
+.glass-button:disabled { cursor: default; opacity: .66; }
+
+.ui-icon {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ui-icon path:first-child:not(:only-child) { fill: none; }
+
+/* Главное меню */
+.main-menu { padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); background: rgba(0, 18, 48, .2); }
+.main-menu-card { width: min(100%, 344px); padding: 30px 22px 22px; border-radius: 34px; text-align: center; }
+.main-menu-card h1 { margin: 8px 0 16px; font-size: clamp(29px, 8.2vw, 40px); line-height: .95; letter-spacing: -.025em; }
+.main-menu-world { display: flex; width: fit-content; max-width: 100%; margin: 0 auto 18px; padding: 8px 14px; flex-direction: column; border-radius: 18px; }
+.main-menu-world strong { overflow: hidden; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.main-menu-world span { margin-top: 2px; font-size: 9px; font-weight: 800; opacity: .7; }
+#play-button { height: 60px; margin-top: 0; font-size: 17px; }
+.main-menu-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.menu-section-button { width: 100%; min-height: 52px; padding: 0 14px; font-size: 11px; }
+.main-menu-utilities { display: flex; justify-content: center; gap: 12px; margin-top: 15px; }
+#main-sound-toggle-button[aria-pressed='false'] { opacity: .58; }
+
+/* HUD */
+.hud { top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); left: max(8px, env(safe-area-inset-left)); gap: 5px; }
+.glass-hud { min-height: 40px; padding: 5px 9px; border-radius: 16px; background-color: rgba(92, 163, 204, .14); -webkit-backdrop-filter: blur(8px) saturate(125%); backdrop-filter: blur(8px) saturate(125%); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 4px 14px rgba(0,29,75,.1); }
+.glass-hud::before { opacity: .26; }
+.hud-stat + .hud-stat { border-left: 0; padding-left: 9px; }
+.next-bubble { flex: 1 1 auto; }
+.score-bubble, .best-bubble { flex: 0 1 auto; }
+.hud-label { opacity: .7; }
+.pause-button { flex-basis: 42px; width: 42px; height: 42px; min-width: 42px; min-height: 42px; border-radius: 50%; }
+.pause-button.is-bouncing { animation: none; }
+
+/* Общие модальные окна */
+.modal { padding: max(18px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); background: rgba(0, 10, 30, .2); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: liquid-overlay-in var(--modal-open-duration) ease both; }
+.glass-modal { animation: liquid-modal-in var(--modal-open-duration) cubic-bezier(.2,.75,.24,1) both; }
+.modal-card { width: min(100%, 350px); padding: 28px 22px 22px; border-radius: 32px; }
+.modal h2 { margin: 6px 0 20px; font-size: clamp(25px, 7vw, 31px); letter-spacing: -.02em; }
+.modal-kicker { font-size: 9px; letter-spacing: .13em; opacity: .62; }
+.modal-button { min-height: 50px; margin-top: 10px; padding: 12px 17px; border-radius: var(--glass-radius-pill); }
+.modal-close-button { top: 11px; right: 11px; width: 40px; height: 40px; min-width: 40px; min-height: 40px; padding: 0 0 3px; font-size: 25px; }
+.pause-card, .settings-card, .game-over-card { width: min(100%, 350px); }
+.pause-dialog-shell { width: min(100%, 350px); text-align: center; }
+.pause-game-title { margin: 0 0 17px; color: #fff; font-size: clamp(28px, 8vw, 38px); line-height: .95; letter-spacing: -.025em; text-shadow: 0 4px 16px rgba(0, 22, 65, .38); }
+.pause-card { padding-top: 18px; }
+.pause-card .modal-button:first-child { margin-top: 0; }
+.settings-modal { z-index: 100; }
+.settings-card { position: relative; text-align: center; }
+.sound-toggle-button { min-height: 52px; }
+.sound-toggle-icon { width: 21px; height: 21px; filter: none; }
+
+/* Выбор миров */
+.worlds-modal { background: rgba(0, 10, 30, .24); }
+.worlds-card { width: min(100%, 520px); max-height: 100%; padding: 25px 16px 17px; border-radius: 32px; }
+.worlds-grid { gap: 11px; }
+.world-card { position: relative; padding: 8px 8px 10px; border-radius: 24px; background-color: rgba(99, 166, 207, .16); text-align: left; }
+.world-card::before { opacity: .24; }
+.world-card-preview { position: relative; width: 100%; height: 116px; overflow: hidden; border-radius: 18px; background-position: center bottom; background-size: cover; }
+.world-card-preview img { position: absolute; right: 8%; bottom: 4px; width: 45%; height: 82%; object-fit: contain; filter: drop-shadow(0 8px 12px rgba(0,15,50,.4)); }
+.world-card h3 { align-self: stretch; margin: 10px 4px 2px; font-size: 16px; }
+.world-card p { min-height: 34px; margin: 0 4px; font-size: 10px; opacity: .68; }
+.world-card-progress { align-self: stretch; margin: 7px 4px 0; font-size: 10px; opacity: .82; }
+.world-card .modal-button { min-height: 40px; margin: 8px 2px 0; padding: 8px; }
+.world-card.is-selected { border-color: rgba(255,255,255,.5); background-color: rgba(var(--ui-accent-rgb), .19); box-shadow: inset 0 0 24px rgba(var(--ui-accent-rgb), .11), var(--glass-inner-highlight); }
+.world-card-selected-mark { position: absolute; z-index: 3; top: 16px; right: 16px; display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid rgba(255,255,255,.56); border-radius: 50%; background: rgba(var(--ui-accent-rgb), .42); box-shadow: 0 4px 12px rgba(0,28,71,.25); font-size: 14px; }
+.world-card-selected-mark[hidden] { display: none; }
+
+/* Атлас */
+.atlas-modal, .fish-detail-modal, .fish-unlock-modal { background: rgba(0, 10, 30, .22); }
+.atlas-card { width: min(100%, 500px); padding: 20px 14px 14px; border-radius: 30px; }
+.atlas-world-tabs { gap: 8px; }
+.atlas-world-tab { min-height: 38px; padding: 7px 9px; font-size: 10px; }
+.atlas-world-tab.is-selected { border-color: rgba(255,255,255,.5); background-color: rgba(var(--ui-accent-rgb), .28); }
+.atlas-grid { grid-auto-rows: minmax(118px, 1fr); gap: 8px; }
+.atlas-fish-card { min-height: 118px; padding: 9px; gap: 3px; border: 1px solid rgba(255,255,255,.16); border-radius: 20px; background: rgba(224,247,255,.065); box-shadow: inset 0 1px 0 rgba(255,255,255,.13); animation: atlas-card-in var(--modal-open-duration) backwards ease; }
+.atlas-fish-card.is-locked { opacity: .54; }
+.atlas-fish-image-wrap { width: min(68px, 19vw); height: min(56px, 16vw); }
+.atlas-fish-image-wrap.has-character-glow { filter: drop-shadow(0 0 10px var(--character-glow-color)); }
+.atlas-fish-image { filter: drop-shadow(0 4px 7px rgba(0,30,75,.28)); }
+.atlas-fish-level { font-size: 7px; font-weight: 900; letter-spacing: .1em; opacity: .52; }
+.atlas-fish-card strong { font-size: clamp(12px, 3.6vw, 15px); }
+.atlas-fish-description { -webkit-line-clamp: 3; font-size: clamp(8px, 2.1vw, 10px); opacity: .76; }
+.fish-detail-card { width: min(100%, 380px); padding: 25px 22px 22px; border-radius: 32px; }
+.fish-detail-image.has-character-glow { filter: drop-shadow(0 0 18px var(--character-glow-color)) drop-shadow(0 12px 16px rgba(0,31,74,.28)); }
+
+/* Game Over */
+.new-record-badge { display: inline-flex; margin: -7px auto 15px; padding: 7px 12px; border-radius: var(--glass-radius-pill); color: #fff; font-size: 9px; font-weight: 900; letter-spacing: .12em; animation: record-badge-in 260ms ease both; }
+.new-record-badge[hidden] { display: none; }
+.results { gap: 9px; margin-bottom: 18px; }
+.results div { padding: 12px 8px; border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.065); }
+
+@keyframes liquid-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes liquid-modal-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes record-badge-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+
+@media (hover: hover) and (pointer: fine) {
+  .glass-button:not(:disabled):hover { transform: scale(var(--button-hover-scale)); filter: brightness(1.06); }
+  .atlas-fish-card.is-unlocked:hover { transform: scale(1.02); filter: brightness(1.06); }
+}
+
+@media (max-width: 360px) {
+  .main-menu-card { padding-right: 17px; padding-left: 17px; }
+  .worlds-grid { grid-template-columns: 1fr; }
+  .world-card { display: grid; grid-template-columns: 98px minmax(0, 1fr); column-gap: 9px; }
+  .world-card-preview { grid-row: 1 / 6; width: 98px; height: 112px; }
+  .world-card-preview img { right: 0; width: 76%; }
+  .world-card h3, .world-card p, .world-card-progress, .world-card .modal-button { grid-column: 2; }
+  .world-card-selected-mark { top: 14px; left: 76px; right: auto; }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background-color: rgba(57, 126, 174, .82); }
+  .glass-strong { background-color: rgba(43, 103, 154, .9); }
+  .modal { background-color: rgba(0, 20, 52, .5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-button, .glass-modal, .modal, .atlas-fish-card, .new-record-badge { transition-duration: 1ms !important; animation-duration: 1ms !important; }
 }

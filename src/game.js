@@ -36,6 +36,7 @@ let activeWorld = WORLDS[activeWorldId];
 let FRUITS = activeWorld.characters;
 let FISH_DATA = FRUITS;
 let startSceneWithoutMainMenu = false;
+let forceMainMenuAfterRestart = false;
 
 const GLOW_SPHERE_TEXTURE_KEY = 'jellyfish-glow-sphere';
 const GLOW_SPHERE_TEXTURE_PATH = './assets/effects/glow_sphere.svg';
@@ -380,8 +381,14 @@ const ui = {
   warning: document.querySelector('#warning'),
   mainMenu: document.querySelector('#main-menu'),
   mainMenuWorld: document.querySelector('#main-menu-world'),
+  mainMenuProgress: document.querySelector('#main-menu-progress'),
   playButton: document.querySelector('#play-button'),
   worldsButton: document.querySelector('#worlds-button'),
+  atlasButton: document.querySelector('#atlas-button'),
+  mainSoundToggleButton: document.querySelector('#main-sound-toggle-button'),
+  settingsButton: document.querySelector('#settings-button'),
+  settingsModal: document.querySelector('#settings-modal'),
+  settingsCloseButton: document.querySelector('#settings-close-button'),
   worldsModal: document.querySelector('#worlds-modal'),
   worldsCloseButton: document.querySelector('#worlds-close-button'),
   worldsGrid: document.querySelector('#worlds-grid'),
@@ -393,11 +400,14 @@ const ui = {
   ambientToggleButton: document.querySelector('#ambient-toggle-button'),
   ambientToggleText: document.querySelector('#ambient-toggle-text'),
   pauseRestartButton: document.querySelector('#pause-restart-button'),
+  pauseSettingsButton: document.querySelector('#pause-settings-button'),
   pauseWorldsButton: document.querySelector('#pause-worlds-button'),
   gameOver: document.querySelector('#game-over'),
   finalScore: document.querySelector('#final-score'),
   bestScore: document.querySelector('#best-score'),
+  newRecordBadge: document.querySelector('#new-record-badge'),
   restartButton: document.querySelector('#restart-button'),
+  gameOverMenuButton: document.querySelector('#game-over-menu-button'),
   progression: progressionElement,
   progressSlots: [...progressionElement.querySelectorAll('.progress-slot')],
   atlasModal: document.querySelector('#atlas-modal'),
@@ -740,7 +750,11 @@ class FruitScene extends Phaser.Scene {
     if (QA_GAME_OVER) this.setupGameOverQa();
     if (QA_PROGRESSION) this.setupProgressionQa();
     if (QA_LEVEL_ONE_MERGE) this.setupLevelOneMergeQa();
-    if (QA_MODE || startSceneWithoutMainMenu) {
+    if (forceMainMenuAfterRestart) {
+      forceMainMenuAfterRestart = false;
+      startSceneWithoutMainMenu = false;
+      this.openMainMenu();
+    } else if (QA_MODE || startSceneWithoutMainMenu) {
       startSceneWithoutMainMenu = false;
       this.closeMainMenu();
     } else {
@@ -930,6 +944,8 @@ class FruitScene extends Phaser.Scene {
     ui.soundToggleButton.setAttribute('aria-pressed', String(isEnabled));
     ui.soundToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить звук' : 'Включить звук');
     ui.soundToggleText.textContent = isEnabled ? 'Звук включён' : 'Звук выключен';
+    ui.mainSoundToggleButton.setAttribute('aria-pressed', String(isEnabled));
+    ui.mainSoundToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить звук' : 'Включить звук');
   }
 
   enableSound() {
@@ -1173,7 +1189,7 @@ class FruitScene extends Phaser.Scene {
     Object.values(WORLDS).forEach((world) => {
       const tab = document.createElement('button');
       tab.type = 'button';
-      tab.className = `atlas-world-tab bubble-button${world.id === atlasWorld.id ? ' is-selected' : ''}`;
+      tab.className = `atlas-world-tab glass glass-button glass-button-tertiary${world.id === atlasWorld.id ? ' is-selected' : ''}`;
       tab.textContent = world.name;
       tab.addEventListener('click', () => {
         this.playSound('button');
@@ -1215,7 +1231,15 @@ class FruitScene extends Phaser.Scene {
       description.className = 'atlas-fish-description';
       description.textContent = isUnlocked ? fishData.description : ATLAS_CONFIG.lockedDescription;
 
-      card.append(imageWrap, name, description);
+      const level = document.createElement('span');
+      level.className = 'atlas-fish-level';
+      level.textContent = `УРОВЕНЬ ${fishData.level}`;
+      if (isUnlocked && fishData.glowColor) {
+        imageWrap.classList.add('has-character-glow');
+        imageWrap.style.setProperty('--character-glow-color', fishData.glowColor);
+      }
+
+      card.append(imageWrap, level, name, description);
       if (isUnlocked) card.addEventListener('click', () => this.openFishDetail(levelIndex));
       ui.atlasGrid.appendChild(card);
     });
@@ -1226,7 +1250,7 @@ class FruitScene extends Phaser.Scene {
     this.playSound('button');
     this.cancelCurrentFruitDrag();
     this.atlasWorldId = activeWorldId;
-    this.atlasWasRunning = !this.isPaused && !this.gameEnded;
+    this.atlasWasRunning = !this.isPaused && !this.gameEnded && !this.isMainMenuOpen;
     if (this.atlasWasRunning) {
       this.matter.world.pause();
       this.time.paused = true;
@@ -1268,6 +1292,8 @@ class FruitScene extends Phaser.Scene {
     ui.fishDetailName.textContent = fishData.name;
     ui.fishDetailCharacter.textContent = fishData.character;
     ui.fishDetailDescription.textContent = fishData.description;
+    ui.fishDetailImage.classList.toggle('has-character-glow', Boolean(fishData.glowColor));
+    if (fishData.glowColor) ui.fishDetailImage.style.setProperty('--character-glow-color', fishData.glowColor);
     ui.fishDetailModal.hidden = false;
   }
 
@@ -2534,6 +2560,8 @@ class FruitScene extends Phaser.Scene {
   openMainMenu() {
     this.isMainMenuOpen = true;
     ui.mainMenuWorld.textContent = this.world.name;
+    const collection = readCollectionLevels(this.world);
+    ui.mainMenuProgress.textContent = `${collection.size} / ${this.world.maxSupportedLevels} открыто`;
     ui.mainMenu.hidden = false;
     this.cancelCurrentFruitDrag();
     this.matter.world.pause();
@@ -2598,12 +2626,14 @@ class FruitScene extends Phaser.Scene {
     ui.gameWrap.classList.remove('is-danger');
     this.matter.world.pause();
 
-    if (this.score > this.bestScore) {
+    const isNewRecord = this.score > this.bestScore;
+    if (isNewRecord) {
       this.bestScore = this.score;
       saveBestScore(this.bestScore);
     }
     ui.finalScore.textContent = this.score.toLocaleString('ru-RU');
     ui.bestScore.textContent = this.bestScore.toLocaleString('ru-RU');
+    ui.newRecordBadge.hidden = !isNewRecord;
     ui.gameOver.hidden = false;
   }
 
@@ -2620,6 +2650,8 @@ class FruitScene extends Phaser.Scene {
     ui.pauseModal.hidden = true;
     ui.worldsModal.hidden = true;
     ui.gameOver.hidden = true;
+    ui.settingsModal.hidden = true;
+    ui.newRecordBadge.hidden = true;
     ui.atlasModal.hidden = true;
     ui.fishDetailModal.hidden = true;
     ui.fishUnlockModal.hidden = true;
@@ -2681,6 +2713,7 @@ function restartGame() {
   scene.time.paused = false;
   scene.matter.world.resume();
   ui.pauseModal.hidden = true;
+  ui.settingsModal.hidden = true;
   ui.gameOver.hidden = true;
   scene.scene.restart();
 }
@@ -2690,24 +2723,32 @@ function renderWorldCards() {
   Object.values(WORLDS).forEach((world) => {
     const collection = readCollectionLevels(world);
     const card = document.createElement('article');
-    card.className = `world-card${world.id === activeWorldId ? ' is-selected' : ''}`;
+    card.className = `world-card glass${world.id === activeWorldId ? ' is-selected' : ''}`;
+    const previewWrap = document.createElement('div');
+    previewWrap.className = 'world-card-preview';
+    previewWrap.style.backgroundImage = `linear-gradient(180deg, transparent 30%, rgba(0, 13, 44, .42)), url(${world.backgrounds.seabedPath})`;
     const preview = document.createElement('img');
     preview.src = world.characters[world.previewCharacterLevel - 1].texturePath;
     preview.alt = world.name;
+    previewWrap.appendChild(preview);
     const title = document.createElement('h3');
     title.textContent = world.name;
     const description = document.createElement('p');
     description.textContent = world.menuDescription;
     const progress = document.createElement('span');
     progress.className = 'world-card-progress';
-    progress.textContent = `${collection.size} / ${world.characters.length} открыто`;
+    progress.textContent = `${collection.size} / ${world.maxSupportedLevels} открыто`;
+    const selectedMark = document.createElement('span');
+    selectedMark.className = 'world-card-selected-mark';
+    selectedMark.textContent = '✓';
+    selectedMark.hidden = world.id !== activeWorldId;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'modal-button bubble-button';
+    button.className = 'modal-button glass glass-button glass-button-secondary';
     button.textContent = world.id === activeWorldId ? 'Выбрано' : 'Выбрать';
     button.disabled = world.id === activeWorldId;
     button.addEventListener('click', () => selectWorld(world.id));
-    card.append(preview, title, description, progress, button);
+    card.append(previewWrap, selectedMark, title, description, progress, button);
     ui.worldsGrid.appendChild(card);
   });
 }
@@ -2720,6 +2761,28 @@ function openWorldsModal() {
 
 function closeWorldsModal() {
   ui.worldsModal.hidden = true;
+}
+
+function openSettingsModal() {
+  activeScene().playSound('button');
+  ui.settingsModal.hidden = false;
+}
+
+function closeSettingsModal() {
+  ui.settingsModal.hidden = true;
+}
+
+function returnToMainMenu() {
+  const scene = activeScene();
+  scene.playSound('button');
+  forceMainMenuAfterRestart = true;
+  startSceneWithoutMainMenu = false;
+  ui.pauseModal.hidden = true;
+  ui.settingsModal.hidden = true;
+  ui.gameOver.hidden = true;
+  scene.time.paused = false;
+  scene.matter.world.resume();
+  scene.scene.restart();
 }
 
 function selectWorld(worldId) {
@@ -2763,6 +2826,12 @@ ui.ambientToggleButton.addEventListener('click', () => {
   scene.playSound('button');
   scene.setAmbientEnabled(!scene.ambientEnabled);
 });
+ui.mainSoundToggleButton.addEventListener('click', () => {
+  const scene = activeScene();
+  if (scene.soundEnabled) scene.playSound('button');
+  scene.toggleSound();
+  if (scene.soundEnabled) scene.playSound('button');
+});
 ui.pauseRestartButton.addEventListener('click', restartGame);
 ui.restartButton.addEventListener('click', restartGame);
 ui.playButton.addEventListener('click', () => {
@@ -2771,7 +2840,15 @@ ui.playButton.addEventListener('click', () => {
   scene.closeMainMenu();
 });
 ui.worldsButton.addEventListener('click', openWorldsModal);
+ui.atlasButton.addEventListener('click', () => activeScene().openAtlas());
+ui.settingsButton.addEventListener('click', openSettingsModal);
+ui.pauseSettingsButton.addEventListener('click', openSettingsModal);
+ui.settingsCloseButton.addEventListener('click', closeSettingsModal);
+ui.settingsModal.addEventListener('click', (event) => {
+  if (event.target === ui.settingsModal) closeSettingsModal();
+});
 ui.pauseWorldsButton.addEventListener('click', openWorldsModal);
+ui.gameOverMenuButton.addEventListener('click', returnToMainMenu);
 ui.worldsCloseButton.addEventListener('click', closeWorldsModal);
 ui.worldsModal.addEventListener('click', (event) => {
   if (event.target === ui.worldsModal) closeWorldsModal();
@@ -2793,7 +2870,8 @@ ui.fishUnlockModal.addEventListener('click', () => activeScene().closeFishUnlock
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   const scene = activeScene();
-  if (!ui.worldsModal.hidden) closeWorldsModal();
+  if (!ui.settingsModal.hidden) closeSettingsModal();
+  else if (!ui.worldsModal.hidden) closeWorldsModal();
   else if (!ui.fishDetailModal.hidden) scene.closeFishDetail();
   else if (!ui.atlasModal.hidden) scene.closeAtlas();
 });
