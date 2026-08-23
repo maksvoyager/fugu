@@ -21,13 +21,54 @@ const FISH_ANIMATION = Object.freeze({
   eyesClosedTexturePath: './assets/fish/animated/level1/eyes_closed.png',
 
   // Случайное моргание глаз
-  blinkMinDelay: 3000,
-  blinkMaxDelay: 7000,
+  blinkMinDelay: 2500,
+  blinkMaxDelay: 6000,
   blinkDuration: 120,
-  doubleBlinkChance: 0.15,
+  doubleBlinkChance: 0.12,
   doubleBlinkOpenMinDelay: 80,
   doubleBlinkOpenMaxDelay: 120,
   doubleBlinkDuration: 100,
+});
+
+// ---------- Спокойные idle-анимации персонажей ----------
+// Циклы меняют только внутренний visual-контейнер и не затрагивают Matter body.
+const CHARACTER_IDLE_CONFIG = Object.freeze({
+  fugu: Object.freeze({
+    breathScaleXMin: 1.023,
+    breathScaleXMax: 1.027,
+    breathScaleYMin: 1.016,
+    breathScaleYMax: 1.020,
+    breathDurationMin: 1200,
+    breathDurationMax: 1600,
+    breathRestMin: 300,
+    breathRestMax: 700,
+    floatUpOffset: -2,
+    floatDownOffset: 1,
+    floatRotationMin: 0.5,
+    floatRotationMax: 0.7,
+    floatCycleDurationMin: 3600,
+    floatCycleDurationMax: 5200,
+    maxInitialDelay: 1200,
+  }),
+  jellyfish: Object.freeze({
+    pulseScaleXMin: 1.032,
+    pulseScaleXMax: 1.038,
+    pulseScaleYMin: 0.950,
+    pulseScaleYMax: 0.960,
+    pulseDurationMin: 900,
+    pulseDurationMax: 1300,
+    pulseRestMin: 300,
+    pulseRestMax: 600,
+    floatUpOffset: -3,
+    floatDownOffset: 2,
+    floatCycleDurationMin: 2600,
+    floatCycleDurationMax: 3800,
+    glowScaleMin: 1.07,
+    glowScaleMax: 1.09,
+    glowAlphaMultiplierMin: 1.27,
+    glowAlphaMultiplierMax: 1.33,
+    maxInitialDelay: 1400,
+  }),
 });
 
 // ---------- Данные подводного атласа ----------
@@ -582,6 +623,7 @@ class FruitScene extends Phaser.Scene {
     this.recordSoundPlayed = false;
     this.gameOverSoundPlayed = false;
     this.stoppedBlinkAnimationCount = 0;
+    this.stoppedIdleAnimationCount = 0;
     ui.gameWrap.dataset.world = activeWorldId;
     ui.gameWrap.classList.remove('world-fugu', 'world-jellyfish');
     ui.gameWrap.classList.add(activeWorld.themeClass);
@@ -1798,13 +1840,14 @@ class FruitScene extends Phaser.Scene {
       .setOrigin(config.originX, config.originY)
       .setVisible(false);
 
-    const visual = this.add.container(x, y, [body, eyesClosed])
+    const idleVisual = this.add.container(0, 0, [body, eyesClosed]);
+    const visual = this.add.container(x, y, [idleVisual])
       .setDepth(FISH_VISUAL_CONFIG.imageDepth);
     const targetImageWidth = (config.radius * 2) / config.bodyRatio;
     const baseVisualScale = targetImageWidth / body.width;
     visual.setScale(baseVisualScale);
 
-    return { visual, body, eyesClosed, baseVisualScale };
+    return { visual, idleVisual, body, eyesClosed, baseVisualScale };
   }
 
   scheduleFruitAnimationCall(fruit, delay, callback) {
@@ -1862,6 +1905,143 @@ class FruitScene extends Phaser.Scene {
     if (fruit.animationTimers?.size) this.stoppedBlinkAnimationCount += 1;
     fruit.animationTimers?.forEach((timer) => timer.remove(false));
     fruit.animationTimers?.clear();
+    fruit.eyesClosed?.setVisible(false);
+  }
+
+  // Внутренний контейнер дышит отдельно от root visual, который используется merge-bounce.
+  startCharacterIdleAnimation(fruit) {
+    if (!fruit.idleVisual || fruit.idleTween || fruit.removed) return;
+    const idleConfig = CHARACTER_IDLE_CONFIG[this.world.characterType];
+    if (!idleConfig) return;
+
+    if (this.world.characterType === 'jellyfish') {
+      const pulseScaleX = Phaser.Math.FloatBetween(
+        idleConfig.pulseScaleXMin,
+        idleConfig.pulseScaleXMax,
+      );
+      const pulseScaleY = Phaser.Math.FloatBetween(
+        idleConfig.pulseScaleYMin,
+        idleConfig.pulseScaleYMax,
+      );
+      fruit.idleProfile = {
+        pulseScaleX,
+        pulseScaleY,
+        glowScale: Phaser.Math.FloatBetween(idleConfig.glowScaleMin, idleConfig.glowScaleMax),
+        glowAlphaMultiplier: Phaser.Math.FloatBetween(
+          idleConfig.glowAlphaMultiplierMin,
+          idleConfig.glowAlphaMultiplierMax,
+        ),
+      };
+      fruit.idleState = { progress: 0 };
+      fruit.idleTween = this.tweens.add({
+        targets: fruit.idleState,
+        progress: 1,
+        duration: Phaser.Math.Between(
+          idleConfig.pulseDurationMin,
+          idleConfig.pulseDurationMax,
+        ),
+        delay: Phaser.Math.Between(0, idleConfig.maxInitialDelay),
+        repeatDelay: Phaser.Math.Between(idleConfig.pulseRestMin, idleConfig.pulseRestMax),
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+        onUpdate: () => this.applyCharacterIdleState(fruit),
+      });
+      this.startCharacterFloatAnimation(fruit, idleConfig, false);
+      return;
+    }
+
+    fruit.idleTween = this.tweens.add({
+      targets: fruit.idleVisual,
+      scaleX: Phaser.Math.FloatBetween(idleConfig.breathScaleXMin, idleConfig.breathScaleXMax),
+      scaleY: Phaser.Math.FloatBetween(idleConfig.breathScaleYMin, idleConfig.breathScaleYMax),
+      duration: Phaser.Math.Between(idleConfig.breathDurationMin, idleConfig.breathDurationMax),
+      delay: Phaser.Math.Between(0, idleConfig.maxInitialDelay),
+      repeatDelay: Phaser.Math.Between(idleConfig.breathRestMin, idleConfig.breathRestMax),
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+    });
+    this.startCharacterFloatAnimation(fruit, idleConfig, true);
+  }
+
+  startCharacterFloatAnimation(fruit, idleConfig, includesRotation) {
+    fruit.floatState = { phase: 0 };
+    fruit.floatProfile = {
+      upOffset: idleConfig.floatUpOffset,
+      downOffset: idleConfig.floatDownOffset,
+      rotation: includesRotation
+        ? Phaser.Math.FloatBetween(idleConfig.floatRotationMin, idleConfig.floatRotationMax)
+        : 0,
+    };
+    fruit.floatTween = this.tweens.add({
+      targets: fruit.floatState,
+      phase: 1,
+      duration: Phaser.Math.Between(
+        idleConfig.floatCycleDurationMin,
+        idleConfig.floatCycleDurationMax,
+      ),
+      delay: Phaser.Math.Between(0, idleConfig.maxInitialDelay),
+      ease: 'Sine.easeInOut',
+      repeat: -1,
+      onUpdate: () => this.applyCharacterFloatState(fruit),
+    });
+  }
+
+  applyCharacterFloatState(fruit) {
+    if (fruit.removed || !fruit.idleVisual || !fruit.floatState || !fruit.floatProfile) return;
+    const wave = Math.sin(fruit.floatState.phase * NUMBER_FORMAT_CONFIG.fullCircle);
+    const y = wave >= 0
+      ? fruit.floatProfile.upOffset * wave
+      : fruit.floatProfile.downOffset * -wave;
+    fruit.idleVisual.setY(y).setRotation(
+      Phaser.Math.DegToRad(fruit.floatProfile.rotation) * wave,
+    );
+  }
+
+  applyCharacterIdleState(fruit) {
+    if (fruit.removed || !fruit.idleVisual || !fruit.idleState || !fruit.idleProfile) return;
+    const progress = fruit.idleState.progress;
+    fruit.idleVisual.setScale(
+      Phaser.Math.Linear(1, fruit.idleProfile.pulseScaleX, progress),
+      Phaser.Math.Linear(1, fruit.idleProfile.pulseScaleY, progress),
+    );
+    if (!fruit.characterGlow) return;
+    const glowScale = Phaser.Math.Linear(1, fruit.idleProfile.glowScale, progress);
+    fruit.characterGlow.setScale(
+      fruit.glowBaseScaleX * glowScale,
+      fruit.glowBaseScaleY * glowScale,
+    ).setAlpha(Phaser.Math.Linear(
+      fruit.glowBaseAlpha,
+      Math.min(1, fruit.glowBaseAlpha * fruit.idleProfile.glowAlphaMultiplier),
+      progress,
+    ));
+  }
+
+  resetCharacterIdleVisual(fruit) {
+    if (fruit.idleState) fruit.idleState.progress = 0;
+    if (fruit.floatState) fruit.floatState.phase = 0;
+    fruit.idleVisual?.setPosition(0, 0).setScale(1).setRotation(0);
+    if (fruit.characterGlow && Number.isFinite(fruit.glowBaseScaleX)) {
+      fruit.characterGlow
+        .setScale(fruit.glowBaseScaleX, fruit.glowBaseScaleY)
+        .setAlpha(fruit.glowBaseAlpha);
+    }
+  }
+
+  stopCharacterIdleAnimation(fruit) {
+    if (fruit.idleTween || fruit.floatTween) this.stoppedIdleAnimationCount += 1;
+    fruit.idleTween?.stop();
+    fruit.idleTween?.remove();
+    fruit.floatTween?.stop();
+    fruit.floatTween?.remove();
+    fruit.idleTween = null;
+    fruit.floatTween = null;
+    this.resetCharacterIdleVisual(fruit);
+    fruit.idleState = null;
+    fruit.idleProfile = null;
+    fruit.floatState = null;
+    fruit.floatProfile = null;
   }
 
   createFruit(x, y, level, isHeld = false) {
@@ -1876,19 +2056,22 @@ class FruitScene extends Phaser.Scene {
     let shine = null;
     let label = null;
     let baseVisualScale = 1;
+    let idleVisual = null;
     let body = null;
     let eyesClosed = null;
 
     if (usesAnimatedLevelOne) {
       const animatedVisual = this.createLevelOneAnimatedVisual(x, y, config);
-      ({ visual, body, eyesClosed, baseVisualScale } = animatedVisual);
+      ({ visual, idleVisual, body, eyesClosed, baseVisualScale } = animatedVisual);
     } else if (hasTexture) {
-      visual = this.add.image(x, y, config.textureKey)
-        .setOrigin(config.originX, config.originY)
+      const image = this.add.image(0, 0, config.textureKey)
+        .setOrigin(config.originX, config.originY);
+      idleVisual = this.add.container(0, 0, [image]);
+      visual = this.add.container(x, y, [idleVisual])
         .setDepth(FISH_VISUAL_CONFIG.imageDepth);
       // Основное тело занимает bodyRatio ширины PNG; хвост остаётся вне коллайдера.
       const targetImageWidth = (config.radius * 2) / config.bodyRatio;
-      baseVisualScale = targetImageWidth / visual.width;
+      baseVisualScale = targetImageWidth / image.width;
       visual.setScale(baseVisualScale);
     } else {
       visual = this.add.circle(x, y, config.radius, config.color)
@@ -1929,6 +2112,13 @@ class FruitScene extends Phaser.Scene {
       shine,
       label,
       baseVisualScale,
+      idleVisual,
+      idleTween: null,
+      idleState: null,
+      idleProfile: null,
+      floatTween: null,
+      floatState: null,
+      floatProfile: null,
       usesTexture: usesAnimatedLevelOne || hasTexture,
       body,
       eyesClosed,
@@ -1936,6 +2126,9 @@ class FruitScene extends Phaser.Scene {
       characterGlow: null,
       ambientGlow: null,
       glowTween: null,
+      glowBaseScaleX: 1,
+      glowBaseScaleY: 1,
+      glowBaseAlpha: 0,
       physics: null,
       level,
       isHeld,
@@ -1946,6 +2139,7 @@ class FruitScene extends Phaser.Scene {
       lastBubbleAt: this.time.now + Phaser.Math.Between(0, FISH_VISUAL_CONFIG.initialBubbleDelayMax),
     };
     this.createWorldCharacterGlow(fruit, config);
+    this.startCharacterIdleAnimation(fruit);
     if (usesAnimatedLevelOne) this.startBlinkAnimation(fruit);
     if (!isHeld) this.activateFruitPhysics(fruit);
     return fruit;
@@ -1965,16 +2159,26 @@ class FruitScene extends Phaser.Scene {
       .setTint(config.glowColorNumber)
       .setAlpha(glowConfig.sphereAlpha)
       .setDisplaySize(sphereDiameter, sphereDiameter);
+    fruit.glowBaseScaleX = fruit.characterGlow.scaleX;
+    fruit.glowBaseScaleY = fruit.characterGlow.scaleY;
+    fruit.glowBaseAlpha = glowConfig.sphereAlpha;
   }
 
   setWorldCharacterAnimationsPaused(value) {
     const characters = new Set(this.fruits.values());
     if (this.currentFruit) characters.add(this.currentFruit);
     characters.forEach((fruit) => {
-      if (!fruit.glowTween) return;
-      if (value) fruit.glowTween.pause();
-      else fruit.glowTween.resume();
+      [fruit.idleTween, fruit.floatTween, fruit.glowTween].filter(Boolean).forEach((tween) => {
+        if (value) tween.pause();
+        else tween.resume();
+      });
+      fruit.animationTimers?.forEach((timer) => {
+        timer.paused = value;
+      });
     });
+    if (QA_FISH_ANIMATION) {
+      ui.gameWrap.dataset.qaCharacterAnimationsPaused = String(value);
+    }
   }
 
   activateFruitPhysics(fruit) {
@@ -2365,8 +2569,12 @@ class FruitScene extends Phaser.Scene {
     const glow = fruit.characterGlow;
     if (!glowConfig || !glow) return;
 
-    const glowBaseScaleX = glow.scaleX;
-    const glowBaseScaleY = glow.scaleY;
+    // Merge-вспышка временно главнее idle, затем новый цикл начинается с нейтрали.
+    fruit.idleTween?.pause();
+    fruit.floatTween?.pause();
+    this.resetCharacterIdleVisual(fruit);
+    const glowBaseScaleX = fruit.glowBaseScaleX;
+    const glowBaseScaleY = fruit.glowBaseScaleY;
     glow.setScale(
       glowBaseScaleX * glowConfig.mergedGlowStartScale,
       glowBaseScaleY * glowConfig.mergedGlowStartScale,
@@ -2381,6 +2589,8 @@ class FruitScene extends Phaser.Scene {
       ease: 'Sine.easeOut',
       onComplete: () => {
         if (fruit.glowTween === glowTween) fruit.glowTween = null;
+        if (!fruit.removed && fruit.idleTween) fruit.idleTween.restart();
+        if (!fruit.removed && fruit.floatTween) fruit.floatTween.restart();
       },
     });
     fruit.glowTween = glowTween;
@@ -2463,6 +2673,7 @@ class FruitScene extends Phaser.Scene {
   disposeWorldCharacterEffects(fruit) {
     if (!fruit) return;
     this.stopBlinkAnimation(fruit);
+    this.stopCharacterIdleAnimation(fruit);
     fruit.glowTween?.stop();
     fruit.glowTween?.remove();
     fruit.characterGlow?.destroy();
@@ -2588,11 +2799,40 @@ class FruitScene extends Phaser.Scene {
       ui.gameWrap.dataset.qaBodyCount = String(this.fruits.size);
     }
     if (QA_FISH_ANIMATION) {
+      const allCharacters = new Set(this.fruits.values());
+      if (this.currentFruit) allCharacters.add(this.currentFruit);
       const animatedFruits = new Set([...this.fruits.values()].filter((fruit) => fruit.eyesClosed));
       if (this.currentFruit?.eyesClosed) animatedFruits.add(this.currentFruit);
       const [animatedFruit] = animatedFruits;
+      const idleCharacters = [...allCharacters].filter((fruit) => fruit.idleTween);
+      const idleTweenCount = idleCharacters.reduce(
+        (count, fruit) => count + Number(Boolean(fruit.idleTween)) + Number(Boolean(fruit.floatTween)),
+        0,
+      );
+      const pulsingJellyfish = idleCharacters.find((fruit) => fruit.idleState);
+      const sampleIdleCharacter = pulsingJellyfish || idleCharacters[0];
       ui.gameWrap.dataset.qaAnimatedLevelOne = String(Boolean(animatedFruit));
       ui.gameWrap.dataset.qaAnimatedFishCount = String(animatedFruits.size);
+      ui.gameWrap.dataset.qaIdleTweenCount = String(idleTweenCount);
+      ui.gameWrap.dataset.qaStoppedIdleAnimationCount = String(this.stoppedIdleAnimationCount);
+      ui.gameWrap.dataset.qaIdleProgress = pulsingJellyfish
+        ? pulsingJellyfish.idleState.progress.toFixed(4)
+        : '';
+      ui.gameWrap.dataset.qaIdleScaleX = sampleIdleCharacter
+        ? sampleIdleCharacter.idleVisual.scaleX.toFixed(4)
+        : '';
+      ui.gameWrap.dataset.qaIdleScaleY = sampleIdleCharacter
+        ? sampleIdleCharacter.idleVisual.scaleY.toFixed(4)
+        : '';
+      ui.gameWrap.dataset.qaIdleOffsetY = sampleIdleCharacter
+        ? sampleIdleCharacter.idleVisual.y.toFixed(3)
+        : '';
+      ui.gameWrap.dataset.qaIdleRotation = sampleIdleCharacter
+        ? Phaser.Math.RadToDeg(sampleIdleCharacter.idleVisual.rotation).toFixed(3)
+        : '';
+      ui.gameWrap.dataset.qaIdleGlowAlpha = pulsingJellyfish?.characterGlow
+        ? pulsingJellyfish.characterGlow.alpha.toFixed(4)
+        : '';
       ui.gameWrap.dataset.qaEyesClosed = animatedFruit
         ? String(animatedFruit.eyesClosed.visible)
         : '';
@@ -2685,6 +2925,7 @@ class FruitScene extends Phaser.Scene {
     ui.warning.classList.remove('is-visible');
     ui.gameWrap.classList.remove('is-danger');
     this.matter.world.pause();
+    this.setWorldCharacterAnimationsPaused(true);
 
     const isNewRecord = this.score > this.bestScore;
     if (isNewRecord) {
