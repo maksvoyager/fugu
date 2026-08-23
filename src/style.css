@@ -145,6 +145,9 @@ button { font: inherit; }
   isolation: isolate;
 }
 
+/* Safari учитывает touch-action всех предков: разрешаем pan только открытому Атласу. */
+.game-wrap.is-atlas-open { touch-action: pan-y; }
+
 .game-wrap.world-jellyfish {
   background:
     radial-gradient(ellipse at 50% 5%, rgba(95, 121, 255, .24), transparent 37%),
@@ -562,6 +565,7 @@ button { font: inherit; }
     max(10px, env(safe-area-inset-left));
   background: rgba(0, 34, 78, .55);
   animation: atlas-overlay-in var(--modal-animation-duration) ease-out;
+  touch-action: pan-y;
 }
 .atlas-card {
   position: relative;
@@ -1018,7 +1022,16 @@ button { font: inherit; }
 
 /* Атлас */
 .atlas-modal, .fish-detail-modal, .fish-unlock-modal { background: rgba(0, 10, 30, .22); }
-.atlas-card { width: min(100%, 500px); padding: 20px 14px 14px; border-radius: 30px; }
+.atlas-card {
+  width: min(100%, 500px);
+  padding: 20px 14px 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: 30px;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .atlas-world-tabs { gap: 8px; }
 .atlas-world-tab { min-height: 38px; padding: 7px 9px; font-size: 10px; }
 .atlas-world-tab.is-selected { border-color: rgba(255,255,255,.5); background-color: rgba(var(--ui-accent-rgb), .28); }

@@ -1300,6 +1300,7 @@ class FruitScene extends Phaser.Scene {
       this.setSharkPaused(true);
     }
     this.renderAtlas();
+    ui.gameWrap.classList.add('is-atlas-open');
     ui.atlasModal.hidden = false;
   }
 
@@ -1308,6 +1309,7 @@ class FruitScene extends Phaser.Scene {
     this.playSound('button');
     ui.fishDetailModal.hidden = true;
     ui.atlasModal.hidden = true;
+    ui.gameWrap.classList.remove('is-atlas-open');
     if (this.atlasWasRunning && !this.isPaused && !this.gameEnded) {
       this.time.paused = false;
       this.matter.world.resume();
@@ -2954,6 +2956,7 @@ class FruitScene extends Phaser.Scene {
     ui.settingsModal.hidden = true;
     ui.newRecordBadge.hidden = true;
     ui.atlasModal.hidden = true;
+    ui.gameWrap.classList.remove('is-atlas-open');
     ui.fishDetailModal.hidden = true;
     ui.fishUnlockModal.hidden = true;
     ui.fishUnlockModal.classList.remove('can-dismiss');
