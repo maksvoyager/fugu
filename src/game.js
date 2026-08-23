@@ -943,7 +943,7 @@ class FruitScene extends Phaser.Scene {
     const isEnabled = this.soundEnabled;
     ui.soundToggleButton.setAttribute('aria-pressed', String(isEnabled));
     ui.soundToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить звук' : 'Включить звук');
-    ui.soundToggleText.textContent = isEnabled ? 'Звук включён' : 'Звук выключен';
+    ui.soundToggleText.textContent = 'ЗВУК';
     ui.mainSoundToggleButton.setAttribute('aria-pressed', String(isEnabled));
     ui.mainSoundToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить звук' : 'Включить звук');
   }
@@ -975,7 +975,7 @@ class FruitScene extends Phaser.Scene {
     const isEnabled = this.ambientEnabled;
     ui.ambientToggleButton.setAttribute('aria-pressed', String(isEnabled));
     ui.ambientToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить атмосферу' : 'Включить атмосферу');
-    ui.ambientToggleText.textContent = isEnabled ? 'Звук окружения ВКЛ' : 'Звук окружения ВЫКЛ';
+    ui.ambientToggleText.textContent = 'ОКРУЖЕНИЕ';
   }
 
   ambientTargetVolume() {
@@ -2783,7 +2783,7 @@ function renderWorldCards() {
   Object.values(WORLDS).forEach((world) => {
     const collection = readCollectionLevels(world);
     const card = document.createElement('article');
-    card.className = `world-card glass${world.id === activeWorldId ? ' is-selected' : ''}`;
+    card.className = `world-card glass ${world.themeClass}${world.id === activeWorldId ? ' is-selected' : ''}`;
     const previewWrap = document.createElement('div');
     previewWrap.className = 'world-card-preview';
     previewWrap.style.backgroundImage = `linear-gradient(180deg, transparent 30%, rgba(0, 13, 44, .42)), url(${world.backgrounds.seabedPath})`;
@@ -2800,7 +2800,7 @@ function renderWorldCards() {
     progress.textContent = `${collection.size} / ${world.maxSupportedLevels} открыто`;
     const selectedMark = document.createElement('span');
     selectedMark.className = 'world-card-selected-mark';
-    selectedMark.textContent = '✓';
+    selectedMark.textContent = '✓ ВЫБРАНО';
     selectedMark.hidden = world.id !== activeWorldId;
     const button = document.createElement('button');
     button.type = 'button';
