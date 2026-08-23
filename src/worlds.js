@@ -26,7 +26,7 @@ const JELLYFISH_CHARACTERS = Object.freeze([
   makeCharacter({ level: 5, name: 'Мята', character: 'Спокойная и немного самоуверенная.', description: 'Спокойная, хитрая и немного самоуверенная. Кажется, она всегда знает чуть больше остальных.', glowName: 'мятно-бирюзовое', glowColor: '#45F0CE', glowColorNumber: 0x45f0ce, radius: 66, color: 0x45f0ce, cssColor: '#45F0CE', points: 200, textureKey: 'jellyfish-level-5', texturePath: './assets/jellyfish/level5.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
   makeCharacter({ level: 6, name: 'Луна', character: 'Тихая мечтательница.', description: 'Мечтательница. Может долго смотреть в темноту и совершенно забыть, куда плыла.', glowName: 'жемчужно-белое', glowColor: '#EAF5FF', glowColorNumber: 0xeaf5ff, radius: 81, color: 0xeaf5ff, cssColor: '#EAF5FF', points: 400, textureKey: 'jellyfish-level-6', texturePath: './assets/jellyfish/level6.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
   makeCharacter({ level: 7, name: 'Пламя', character: 'Смелая и вспыльчивая искательница приключений.', description: 'Вспыхивает от любой новой идеи и всегда первой бросается навстречу приключениям.', glowName: 'огненно-коралловое', glowColor: '#FF5A36', glowColorNumber: 0xff5a36, radius: 98, color: 0xff5a36, cssColor: '#FF5A36', points: 800, textureKey: 'jellyfish-level-7', texturePath: './assets/jellyfish/level7.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
-  makeCharacter({ level: 8, name: 'Аврора', character: 'Добрая собирательница подводных чудес.', description: 'Носит под куполом целое северное сияние и с радостью делится его красками со всеми вокруг.', glowName: 'полярно-бирюзовое', glowColor: '#55E8FF', glowColorNumber: 0x55e8ff, radius: 117, color: 0x55e8ff, cssColor: '#55E8FF', points: 1600, textureKey: 'jellyfish-level-8', texturePath: './assets/jellyfish/level8.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
+  makeCharacter({ level: 8, name: 'Эльза', character: 'Добрая собирательница подводных чудес.', description: 'Носит под куполом целое северное сияние и с радостью делится его красками со всеми вокруг.', glowName: 'полярно-бирюзовое', glowColor: '#55E8FF', glowColorNumber: 0x55e8ff, radius: 117, color: 0x55e8ff, cssColor: '#55E8FF', points: 1600, textureKey: 'jellyfish-level-8', texturePath: './assets/jellyfish/level8.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
   makeCharacter({ level: 9, name: 'Ночка', character: 'Загадочная хранительница звёзд.', description: 'Говорит мало, зато знает, где прячутся самые красивые звёзды Лунной бухты.', glowName: 'звёздно-индиговое', glowColor: '#737CFF', glowColorNumber: 0x737cff, radius: 137, color: 0x737cff, cssColor: '#737CFF', points: 3200, textureKey: 'jellyfish-level-9', texturePath: './assets/jellyfish/level9.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
 ]);
 
@@ -82,9 +82,28 @@ export const WORLDS = Object.freeze({
     glow: Object.freeze({
       sphereScale: 1.9,
       sphereAlpha: 0.78,
+
+      // Короткий биолюминесцентный отклик при объединении медуз.
       mergeFlashDuration: 430,
-      mergeFlashScale: 1.34,
-      mergeParticleCount: 10,
+      mergeCoreRadiusRatio: 0.16,
+      mergeCoreAlpha: 0.68,
+      mergeCoreEndScale: 3.2,
+      mergeCoreDuration: 260,
+      mergeBaseRingAlpha: 0.68,
+      mergeBubbleCount: 6,
+      mergeParticleCount: 8,
+      mergeParticleMinRadius: 1.8,
+      mergeParticleMaxRadius: 3.4,
+      mergeParticleMinDistanceRatio: 0.85,
+      mergeParticleMaxDistanceRatio: 1.65,
+      mergeParticleAngleJitter: 0.18,
+      mergeParticleMinDuration: 340,
+      mergeParticleMaxDuration: 520,
+
+      // Новая медуза мягко проявляет собственное свечение после merge.
+      mergedGlowStartScale: 0.78,
+      mergedGlowStartAlpha: 0.98,
+      mergedGlowSettleDuration: 420,
     }),
   }),
 });

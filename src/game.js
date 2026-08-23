@@ -2173,10 +2173,12 @@ class FruitScene extends Phaser.Scene {
     const velocityX = (first.physics.body.velocity.x + second.physics.body.velocity.x) / 2;
     const velocityY = (first.physics.body.velocity.y + second.physics.body.velocity.y) / 2;
     const isMaxLevelMerge = first.level === maxLevelIndex();
+    const effectLevel = isMaxLevelMerge ? first.level : first.level + 1;
     const gainedPoints = isMaxLevelMerge
       ? this.world.maxLevelMergeScore
       : FRUITS[first.level + 1].points;
-    const effectColor = isMaxLevelMerge ? FRUITS[first.level].color : FRUITS[first.level + 1].color;
+    const effectColor = FRUITS[effectLevel].color;
+    const effectRadius = FRUITS[effectLevel].radius;
 
     this.playSound(isMaxLevelMerge ? 'maxMerge' : 'merge');
 
@@ -2196,7 +2198,7 @@ class FruitScene extends Phaser.Scene {
       this.recordSoundPlayed = true;
       this.playSound('record');
     }
-    this.addMergeEffects(x, y, effectColor, gainedPoints);
+    this.addMergeEffects(x, y, effectColor, gainedPoints, effectRadius);
 
     // Две рыбы максимального уровня поглощаются без создания несуществующего следующего уровня.
     if (isMaxLevelMerge) return;
@@ -2219,16 +2221,22 @@ class FruitScene extends Phaser.Scene {
         ease: 'Back.Out',
       });
     });
+    this.animateMergedWorldGlow(merged);
 
     this.unlockLevel(newLevel);
   }
 
   // ======================== Эффекты ========================
 
-  addMergeEffects(x, y, color, points) {
-    this.addWorldMergeFlash(x, y, color);
+  addMergeEffects(x, y, color, points, effectRadius) {
+    const glowConfig = this.world.glow;
+    const ringColor = glowConfig ? color : EFFECTS_CONFIG.ringColor;
+    const ringAlpha = glowConfig?.mergeBaseRingAlpha ?? EFFECTS_CONFIG.ringAlpha;
+    const bubbleCount = glowConfig?.mergeBubbleCount ?? EFFECTS_CONFIG.mergeBubbleCount;
+
+    this.addWorldMergeFlash(x, y, color, effectRadius);
     const ring = this.add.circle(x, y, EFFECTS_CONFIG.ringRadius, 0xffffff, 0)
-      .setStrokeStyle(EFFECTS_CONFIG.ringStrokeWidth, EFFECTS_CONFIG.ringColor, EFFECTS_CONFIG.ringAlpha)
+      .setStrokeStyle(EFFECTS_CONFIG.ringStrokeWidth, ringColor, ringAlpha)
       .setDepth(EFFECTS_CONFIG.ringDepth);
     this.tweens.add({
       targets: ring,
@@ -2239,8 +2247,8 @@ class FruitScene extends Phaser.Scene {
       onComplete: () => ring.destroy(),
     });
 
-    for (let index = 0; index < EFFECTS_CONFIG.mergeBubbleCount; index += 1) {
-      const angle = (NUMBER_FORMAT_CONFIG.fullCircle * index) / EFFECTS_CONFIG.mergeBubbleCount;
+    for (let index = 0; index < bubbleCount; index += 1) {
+      const angle = (NUMBER_FORMAT_CONFIG.fullCircle * index) / bubbleCount;
       const bubble = this.add.circle(
         x,
         y,
@@ -2292,38 +2300,90 @@ class FruitScene extends Phaser.Scene {
     });
   }
 
-  addWorldMergeFlash(x, y, color) {
+  addWorldMergeFlash(x, y, color, effectRadius) {
     const glowConfig = this.world.glow;
     if (!glowConfig) return;
 
-    const flash = this.add.circle(x, y, EFFECTS_CONFIG.ringRadius, color, 0.18)
-      .setDepth(EFFECTS_CONFIG.ringDepth - 0.1)
+    // Световое ядро не использует текстурный quad, поэтому не даёт прямоугольного артефакта.
+    const core = this.add.circle(
+      x,
+      y,
+      effectRadius * glowConfig.mergeCoreRadiusRatio,
+      color,
+      glowConfig.mergeCoreAlpha,
+    ).setDepth(EFFECTS_CONFIG.ringDepth)
       .setBlendMode(Phaser.BlendModes.ADD);
     this.tweens.add({
-      targets: flash,
-      scale: glowConfig.mergeFlashScale,
+      targets: core,
+      scale: glowConfig.mergeCoreEndScale,
       alpha: 0,
-      duration: glowConfig.mergeFlashDuration,
+      duration: glowConfig.mergeCoreDuration,
       ease: 'Sine.Out',
-      onComplete: () => flash.destroy(),
+      onComplete: () => core.destroy(),
     });
 
     for (let index = 0; index < glowConfig.mergeParticleCount; index += 1) {
-      const angle = (NUMBER_FORMAT_CONFIG.fullCircle * index) / glowConfig.mergeParticleCount;
-      const particle = this.add.circle(x, y, 2.5, color, 0.46)
+      const baseAngle = (NUMBER_FORMAT_CONFIG.fullCircle * index) / glowConfig.mergeParticleCount;
+      const angle = baseAngle + Phaser.Math.FloatBetween(
+        -glowConfig.mergeParticleAngleJitter,
+        glowConfig.mergeParticleAngleJitter,
+      );
+      const distance = Phaser.Math.FloatBetween(
+        effectRadius * glowConfig.mergeParticleMinDistanceRatio,
+        effectRadius * glowConfig.mergeParticleMaxDistanceRatio,
+      );
+      const particle = this.add.circle(
+        x,
+        y,
+        Phaser.Math.FloatBetween(
+          glowConfig.mergeParticleMinRadius,
+          glowConfig.mergeParticleMaxRadius,
+        ),
+        index % 3 === 0 ? 0xffffff : color,
+        EFFECTS_CONFIG.mergeBubbleAlpha,
+      )
         .setDepth(EFFECTS_CONFIG.mergeBubbleDepth)
         .setBlendMode(Phaser.BlendModes.ADD);
       this.tweens.add({
         targets: particle,
-        x: x + Math.cos(angle) * Phaser.Math.Between(24, 52),
-        y: y + Math.sin(angle) * Phaser.Math.Between(24, 52),
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance - EFFECTS_CONFIG.mergeBubbleRiseOffset,
         alpha: 0,
-        scale: 0.4,
-        duration: glowConfig.mergeFlashDuration,
+        scale: EFFECTS_CONFIG.mergeBubbleEndScale,
+        duration: Phaser.Math.Between(
+          glowConfig.mergeParticleMinDuration,
+          glowConfig.mergeParticleMaxDuration,
+        ),
         ease: 'Cubic.Out',
         onComplete: () => particle.destroy(),
       });
     }
+  }
+
+  animateMergedWorldGlow(fruit) {
+    const glowConfig = this.world.glow;
+    const glow = fruit.characterGlow;
+    if (!glowConfig || !glow) return;
+
+    const glowBaseScaleX = glow.scaleX;
+    const glowBaseScaleY = glow.scaleY;
+    glow.setScale(
+      glowBaseScaleX * glowConfig.mergedGlowStartScale,
+      glowBaseScaleY * glowConfig.mergedGlowStartScale,
+    )
+      .setAlpha(glowConfig.mergedGlowStartAlpha);
+    const glowTween = this.tweens.add({
+      targets: glow,
+      scaleX: glowBaseScaleX,
+      scaleY: glowBaseScaleY,
+      alpha: glowConfig.sphereAlpha,
+      duration: glowConfig.mergedGlowSettleDuration,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        if (fruit.glowTween === glowTween) fruit.glowTween = null;
+      },
+    });
+    fruit.glowTween = glowTween;
   }
 
   createTrailBubble(fruit) {
