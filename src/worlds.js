@@ -24,7 +24,10 @@ const JELLYFISH_CHARACTERS = Object.freeze([
   makeCharacter({ level: 3, name: 'Искорка', character: 'Неутомимая исследовательница.', description: 'Любопытная до невозможности. Если где-то что-то блеснуло — она уже там.', glowName: 'янтарно-золотое', glowColor: '#FFB347', glowColorNumber: 0xffb347, radius: 42, color: 0xffb347, cssColor: '#FFB347', points: 50, textureKey: 'jellyfish-level-3', texturePath: './assets/jellyfish/level3.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
   makeCharacter({ level: 4, name: 'Хихи', character: 'Смешливая душа компании.', description: 'Смеётся первой, иногда ещё до того, как поняла шутку.', glowName: 'сиренево-фиолетовое', glowColor: '#B56CFF', glowColorNumber: 0xb56cff, radius: 53, color: 0xb56cff, cssColor: '#B56CFF', points: 100, textureKey: 'jellyfish-level-4', texturePath: './assets/jellyfish/level4.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
   makeCharacter({ level: 5, name: 'Мята', character: 'Спокойная и немного самоуверенная.', description: 'Спокойная, хитрая и немного самоуверенная. Кажется, она всегда знает чуть больше остальных.', glowName: 'мятно-бирюзовое', glowColor: '#45F0CE', glowColorNumber: 0x45f0ce, radius: 66, color: 0x45f0ce, cssColor: '#45F0CE', points: 200, textureKey: 'jellyfish-level-5', texturePath: './assets/jellyfish/level5.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
-  makeCharacter({ level: 6, name: 'Луна', character: 'Тихая мечтательница.', description: 'Мечтательница. Может долго смотреть в темноту и совершенно забыть, куда плыла.', glowName: 'лунно-синее', glowColor: '#6095FF', glowColorNumber: 0x6095ff, radius: 81, color: 0x6095ff, cssColor: '#6095FF', points: 400, textureKey: 'jellyfish-level-6', texturePath: './assets/jellyfish/level6.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
+  makeCharacter({ level: 6, name: 'Луна', character: 'Тихая мечтательница.', description: 'Мечтательница. Может долго смотреть в темноту и совершенно забыть, куда плыла.', glowName: 'жемчужно-белое', glowColor: '#EAF5FF', glowColorNumber: 0xeaf5ff, radius: 81, color: 0xeaf5ff, cssColor: '#EAF5FF', points: 400, textureKey: 'jellyfish-level-6', texturePath: './assets/jellyfish/level6.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
+  makeCharacter({ level: 7, name: 'Пламя', character: 'Смелая и вспыльчивая искательница приключений.', description: 'Вспыхивает от любой новой идеи и всегда первой бросается навстречу приключениям.', glowName: 'огненно-коралловое', glowColor: '#FF5A36', glowColorNumber: 0xff5a36, radius: 98, color: 0xff5a36, cssColor: '#FF5A36', points: 800, textureKey: 'jellyfish-level-7', texturePath: './assets/jellyfish/level7.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
+  makeCharacter({ level: 8, name: 'Аврора', character: 'Добрая собирательница подводных чудес.', description: 'Носит под куполом целое северное сияние и с радостью делится его красками со всеми вокруг.', glowName: 'полярно-бирюзовое', glowColor: '#55E8FF', glowColorNumber: 0x55e8ff, radius: 117, color: 0x55e8ff, cssColor: '#55E8FF', points: 1600, textureKey: 'jellyfish-level-8', texturePath: './assets/jellyfish/level8.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
+  makeCharacter({ level: 9, name: 'Ночка', character: 'Загадочная хранительница звёзд.', description: 'Говорит мало, зато знает, где прячутся самые красивые звёзды Лунной бухты.', glowName: 'звёздно-индиговое', glowColor: '#737CFF', glowColorNumber: 0x737cff, radius: 137, color: 0x737cff, cssColor: '#737CFF', points: 3200, textureKey: 'jellyfish-level-9', texturePath: './assets/jellyfish/level9.png', bodyRatio: 0.68, originX: 0.5, originY: 0.42, progressScale: 0.92 }),
 ]);
 
 const background = (id, folder) => Object.freeze({
@@ -68,14 +71,13 @@ export const WORLDS = Object.freeze({
     menuDescription: 'Ночная бездна с мягким биолюминесцентным сиянием.',
     previewCharacterLevel: 1,
     maxSupportedLevels: 9,
-    // Уровни 7–9 намеренно не перечислены: их белые заглушки не загружаются.
     characters: JELLYFISH_CHARACTERS,
     backgrounds: background('jellyfish', 'jellyfish_back'),
-    lockedTextureKey: 'character-locked',
-    lockedTexturePath: './assets/locked/locked_fish.png',
+    lockedTextureKey: 'jellyfish-character-locked',
+    lockedTexturePath: './assets/locked/locked_jellyfish.png',
     backgroundEvents: Object.freeze([]),
     ambientSound: 'underwater_ambient',
-    maxLevelMergeScore: 800,
+    maxLevelMergeScore: 6400,
     themeClass: 'world-jellyfish',
     glow: Object.freeze({
       sphereScale: 1.9,
