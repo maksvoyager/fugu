@@ -75,7 +75,10 @@ export const WORLDS = Object.freeze({
     backgrounds: background('jellyfish', 'jellyfish_back'),
     lockedTextureKey: 'jellyfish-character-locked',
     lockedTexturePath: './assets/locked/locked_jellyfish.png',
-    backgroundEvents: Object.freeze([]),
+    backgroundEvents: Object.freeze([
+      depthEvent('shark', 'jellyfish_back', 'shark_shadow.png'),
+      depthEvent('fish-school', 'jellyfish_back', 'fish_shadow.png'),
+    ]),
     ambientSound: 'underwater_ambient',
     maxLevelMergeScore: 6400,
     themeClass: 'world-jellyfish',

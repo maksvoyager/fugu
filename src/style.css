@@ -468,7 +468,6 @@ button { font: inherit; }
   animation: modal-in var(--modal-animation-duration) cubic-bezier(.2,.85,.25,1.15);
 }
 .main-menu { z-index: 45; background: rgba(1, 31, 72, .34); }
-.main-menu-card h1 { margin: 7px 0 10px; font-size: clamp(27px, 8vw, 38px); line-height: .95; }
 .main-menu-world { margin: 0 0 20px; font-weight: 900; opacity: .86; }
 .worlds-modal { z-index: 90; background: rgba(0, 18, 56, .72); }
 .worlds-card {
@@ -914,7 +913,8 @@ button { font: inherit; }
 /* Главное меню */
 .main-menu { padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); background: rgba(0, 18, 48, .2); }
 .main-menu-card { width: min(100%, 344px); padding: 30px 22px 22px; border-radius: 34px; text-align: center; }
-.main-menu-card h1 { margin: 8px 0 16px; font-size: clamp(29px, 8.2vw, 40px); line-height: .95; letter-spacing: -.025em; }
+.main-menu-logo-title { margin: 4px 0 16px; line-height: 0; }
+.main-menu-logo { display: block; width: min(100%, 300px); height: auto; margin: 0 auto; object-fit: contain; }
 .main-menu-world { display: flex; width: fit-content; max-width: 100%; margin: 0 auto 18px; padding: 8px 14px; flex-direction: column; border-radius: 18px; }
 .main-menu-world strong { overflow: hidden; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .main-menu-world span { margin-top: 2px; font-size: 9px; font-weight: 800; opacity: .7; }
@@ -945,7 +945,8 @@ button { font: inherit; }
 .modal-close-button { top: 11px; right: 11px; width: 40px; height: 40px; min-width: 40px; min-height: 40px; padding: 0 0 3px; font-size: 25px; }
 .pause-card, .settings-card, .game-over-card { width: min(100%, 350px); }
 .pause-dialog-shell { width: min(100%, 350px); text-align: center; }
-.pause-game-title { margin: 0 0 17px; color: #fff; font-size: clamp(28px, 8vw, 38px); line-height: .95; letter-spacing: -.025em; text-shadow: 0 4px 16px rgba(0, 22, 65, .38); }
+.pause-game-title { margin: 0 0 17px; line-height: 0; }
+.pause-menu-logo { display: block; width: min(78vw, 300px); height: auto; margin: 0 auto; object-fit: contain; }
 .pause-card { padding-top: 18px; }
 .pause-card .modal-button:first-child { margin-top: 0; }
 .settings-modal { z-index: 100; }
