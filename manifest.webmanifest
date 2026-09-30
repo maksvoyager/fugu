@@ -1,0 +1,17 @@
+{
+  "name": "BLOOP",
+  "short_name": "BLOOP",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "./assets/branding/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/branding/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

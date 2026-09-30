@@ -6,6 +6,6 @@
   "scripts": {
     "dev": "node server.mjs",
     "start": "node server.mjs",
-    "check": "node --check src/game.js && node --check src/fruits.js && node --check src/worlds.js && node --check server.mjs"
+    "check": "node --check src/game.js && node --check src/fruits.js && node --check src/worlds.js && node --check src/i18n/index.js && node scripts/check-i18n.mjs && node --check server.mjs"
   }
 }

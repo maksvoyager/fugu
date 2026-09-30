@@ -1003,6 +1003,29 @@ button { font: inherit; }
 .settings-option[aria-pressed='false'] .settings-option-copy,
 .settings-option[aria-pressed='false'] .sound-toggle-icon { opacity: .62; }
 .settings-done-button { width: 100%; margin-top: 14px; }
+.language-settings-button { grid-template-columns: 26px minmax(0, 1fr) 24px; }
+.language-chevron { width: 20px; height: 20px; opacity: .72; }
+
+/* Выбор языка использует тот же лёгкий Liquid Glass без отдельной дизайн-системы. */
+.language-modal { z-index: 110; }
+.language-card { position: relative; width: min(100%, 350px); text-align: center; }
+.language-list { display: grid; gap: 9px; }
+.language-option {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  text-align: left;
+  text-transform: none;
+}
+.language-option.is-selected {
+  border-color: rgba(255,255,255,.56);
+  background-color: rgba(var(--ui-accent-rgb), .3);
+  box-shadow: inset 0 0 20px rgba(var(--ui-accent-rgb), .13), var(--glass-inner-highlight);
+}
+.language-option-mark { width: 22px; font-size: 17px; text-align: center; }
 
 /* Выбор миров */
 .worlds-modal { background: rgba(0, 10, 30, .24); }
@@ -1071,6 +1094,18 @@ button { font: inherit; }
   .world-card h3, .world-card p, .world-card-progress, .world-card .modal-button { grid-column: 2; }
   .world-card-selected-mark { top: 14px; left: 76px; right: auto; }
 }
+
+/* Длинные немецкие и португальские подписи переносятся локально, без уменьшения всего UI. */
+.modal-button,
+.world-card p,
+.atlas-fish-description,
+.settings-option-copy { min-width: 0; overflow-wrap: anywhere; }
+
+html[lang='de'] .pause-card .modal-button,
+html[lang='pt-BR'] .pause-card .modal-button { white-space: normal; line-height: 1.15; }
+
+html[lang='de'] .world-card .modal-button,
+html[lang='pt-BR'] .world-card .modal-button { white-space: normal; }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass { background-color: rgba(57, 126, 174, .82); }

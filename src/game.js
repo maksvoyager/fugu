@@ -9,6 +9,16 @@ import {
   bestScoreStorageKey,
   highestLevelStorageKey,
 } from './worlds.js';
+import {
+  LANGUAGE_OPTIONS,
+  applyTranslations,
+  formatNumber,
+  getLanguageLabel,
+  getLocale,
+  onLanguageChanged,
+  setLocale,
+  t,
+} from './i18n/index.js';
 
 const Phaser = window.Phaser;
 
@@ -107,7 +117,6 @@ const SHARK_CONFIG = Object.freeze({
 });
 
 const ATLAS_CONFIG = Object.freeze({
-  lockedName: '???',
   lockedDescription: '',
   unlockDismissDelay: 1500,
   unlockAutoCloseDelay: 3000,
@@ -400,13 +409,22 @@ const spawnY = () => gameHeight - SCENE_CONFIG.spawnBottomOffset;
 
 const progressionElement = document.querySelector('#progression');
 
+const worldName = (world) => t(world.nameKey);
+const worldDescription = (world) => t(world.descriptionKey);
+const characterName = (character) => t(character.nameKey);
+const characterTrait = (character) => t(character.characterKey);
+const characterDescription = (character) => t(character.descriptionKey);
+
 function rebuildProgressionSlots() {
   progressionElement.replaceChildren();
   FRUITS.forEach((config, index) => {
     const slot = document.createElement('div');
     slot.className = `progress-slot${index === 0 ? ' is-unlocked' : ''}`;
     slot.dataset.level = String(config.level);
-    slot.setAttribute('aria-label', `Уровень ${config.level} ${index === 0 ? 'открыт' : 'закрыт'}`);
+    slot.setAttribute(
+      'aria-label',
+      t(index === 0 ? 'a11y.progressOpen' : 'a11y.progressLocked', { level: config.level }),
+    );
     progressionElement.appendChild(slot);
   });
 }
@@ -440,6 +458,11 @@ const ui = {
   soundToggleText: document.querySelector('#sound-toggle-text'),
   ambientToggleButton: document.querySelector('#ambient-toggle-button'),
   ambientToggleText: document.querySelector('#ambient-toggle-text'),
+  languageButton: document.querySelector('#language-button'),
+  currentLanguageName: document.querySelector('#current-language-name'),
+  languageModal: document.querySelector('#language-modal'),
+  languageCloseButton: document.querySelector('#language-close-button'),
+  languageList: document.querySelector('#language-list'),
   pauseRestartButton: document.querySelector('#pause-restart-button'),
   pauseSettingsButton: document.querySelector('#pause-settings-button'),
   pauseWorldsButton: document.querySelector('#pause-worlds-button'),
@@ -984,10 +1007,10 @@ class FruitScene extends Phaser.Scene {
   updateSoundToggleInterface() {
     const isEnabled = this.soundEnabled;
     ui.soundToggleButton.setAttribute('aria-pressed', String(isEnabled));
-    ui.soundToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить звук' : 'Включить звук');
-    ui.soundToggleText.textContent = 'ЗВУК';
+    ui.soundToggleButton.setAttribute('aria-label', t(isEnabled ? 'a11y.soundOff' : 'a11y.soundOn'));
+    ui.soundToggleText.textContent = t('settings.sound');
     ui.mainSoundToggleButton.setAttribute('aria-pressed', String(isEnabled));
-    ui.mainSoundToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить звук' : 'Включить звук');
+    ui.mainSoundToggleButton.setAttribute('aria-label', t(isEnabled ? 'a11y.soundOff' : 'a11y.soundOn'));
   }
 
   enableSound() {
@@ -1016,8 +1039,8 @@ class FruitScene extends Phaser.Scene {
   updateAmbientToggleInterface() {
     const isEnabled = this.ambientEnabled;
     ui.ambientToggleButton.setAttribute('aria-pressed', String(isEnabled));
-    ui.ambientToggleButton.setAttribute('aria-label', isEnabled ? 'Выключить атмосферу' : 'Включить атмосферу');
-    ui.ambientToggleText.textContent = 'ОКРУЖЕНИЕ';
+    ui.ambientToggleButton.setAttribute('aria-label', t(isEnabled ? 'a11y.ambientOff' : 'a11y.ambientOn'));
+    ui.ambientToggleText.textContent = t('settings.ambient');
   }
 
   ambientTargetVolume() {
@@ -1156,13 +1179,16 @@ class FruitScene extends Phaser.Scene {
     slot.replaceChildren();
     slot.classList.toggle('is-unlocked', isUnlocked);
     slot.classList.remove('just-unlocked');
-    slot.setAttribute('aria-label', `Уровень ${config.level} ${isUnlocked ? 'открыт' : 'закрыт'}`);
+    slot.setAttribute(
+      'aria-label',
+      t(isUnlocked ? 'a11y.progressOpen' : 'a11y.progressLocked', { level: config.level }),
+    );
 
     let visual;
     if (isUnlocked && this.textures.exists(config.textureKey)) {
       visual = this.createProgressImage(
         config.texturePath,
-        `Открытая рыба уровня ${config.level}`,
+        t('a11y.openCharacterImage', { level: config.level }),
         config.progressScale ?? 1,
         config,
       );
@@ -1173,7 +1199,7 @@ class FruitScene extends Phaser.Scene {
     } else if (!isUnlocked && this.textures.exists(this.world.lockedTextureKey)) {
       visual = this.createProgressImage(
         this.world.lockedTexturePath,
-        `Закрытая рыба уровня ${config.level}`,
+        t('a11y.lockedCharacterImage', { level: config.level }),
         PROGRESS_UI.lockedFishScale,
       );
       visual.addEventListener('error', () => {
@@ -1232,7 +1258,7 @@ class FruitScene extends Phaser.Scene {
       const tab = document.createElement('button');
       tab.type = 'button';
       tab.className = `atlas-world-tab glass glass-button glass-button-tertiary${world.id === atlasWorld.id ? ' is-selected' : ''}`;
-      tab.textContent = world.name;
+      tab.textContent = worldName(world);
       tab.addEventListener('click', () => {
         this.playSound('button');
         this.atlasWorldId = world.id;
@@ -1251,7 +1277,9 @@ class FruitScene extends Phaser.Scene {
       card.style.setProperty('--atlas-index', String(levelIndex));
       card.setAttribute(
         'aria-label',
-        isUnlocked ? `${fishData.name}, уровень ${fishData.level}` : `Закрытая рыба уровня ${fishData.level}`,
+        isUnlocked
+          ? t('a11y.atlasOpenCard', { name: characterName(fishData), level: fishData.level })
+          : t('a11y.atlasLockedCard', { level: fishData.level }),
       );
 
       const imageWrap = document.createElement('span');
@@ -1263,19 +1291,21 @@ class FruitScene extends Phaser.Scene {
         image,
         imagePath,
         atlasWorld.lockedTexturePath,
-        isUnlocked ? fishData.name : 'Неоткрытая рыба',
+        isUnlocked
+          ? characterName(fishData)
+          : t('a11y.lockedCharacterImage', { level: fishData.level }),
       );
       imageWrap.appendChild(image);
 
       const name = document.createElement('strong');
-      name.textContent = isUnlocked ? fishData.name : ATLAS_CONFIG.lockedName;
+      name.textContent = isUnlocked ? characterName(fishData) : t('atlas.lockedName');
       const description = document.createElement('span');
       description.className = 'atlas-fish-description';
-      description.textContent = isUnlocked ? fishData.description : ATLAS_CONFIG.lockedDescription;
+      description.textContent = isUnlocked ? characterDescription(fishData) : ATLAS_CONFIG.lockedDescription;
 
       const level = document.createElement('span');
       level.className = 'atlas-fish-level';
-      level.textContent = `УРОВЕНЬ ${fishData.level}`;
+      level.textContent = t('atlas.level', { level: fishData.level });
       if (isUnlocked && fishData.glowColor) {
         imageWrap.classList.add('has-character-glow');
         imageWrap.style.setProperty('--character-glow-color', fishData.glowColor);
@@ -1330,12 +1360,14 @@ class FruitScene extends Phaser.Scene {
       ui.fishDetailImage,
       fishData.texturePath,
       atlasWorld.lockedTexturePath,
-      fishData.name,
+      characterName(fishData),
     );
-    ui.fishDetailLevel.textContent = `УРОВЕНЬ ${fishData.level}`;
-    ui.fishDetailName.textContent = fishData.name;
-    ui.fishDetailCharacter.textContent = fishData.character;
-    ui.fishDetailDescription.textContent = fishData.description;
+    ui.fishDetailLevel.textContent = t('atlas.level', { level: fishData.level });
+    ui.fishDetailName.textContent = characterName(fishData);
+    ui.fishDetailCharacter.textContent = characterTrait(fishData);
+    ui.fishDetailDescription.textContent = characterDescription(fishData);
+    ui.fishDetailModal.dataset.level = String(levelIndex);
+    ui.fishDetailModal.dataset.world = atlasWorld.id;
     ui.fishDetailImage.classList.toggle('has-character-glow', Boolean(fishData.glowColor));
     if (fishData.glowColor) ui.fishDetailImage.style.setProperty('--character-glow-color', fishData.glowColor);
     ui.fishDetailModal.hidden = false;
@@ -1357,10 +1389,11 @@ class FruitScene extends Phaser.Scene {
       ui.fishUnlockImage,
       FRUITS[levelIndex].texturePath,
       this.world.lockedTexturePath,
-      fishData.name,
+      characterName(fishData),
     );
-    ui.fishUnlockName.textContent = fishData.name;
-    ui.fishUnlockDescription.textContent = fishData.description;
+    ui.fishUnlockName.textContent = characterName(fishData);
+    ui.fishUnlockDescription.textContent = characterDescription(fishData);
+    ui.fishUnlockModal.dataset.level = String(levelIndex);
     ui.fishUnlockModal.classList.remove('can-dismiss');
     ui.fishUnlockModal.hidden = false;
     this.unlockCanDismissAt = performance.now() + ATLAS_CONFIG.unlockDismissDelay;
@@ -1721,7 +1754,7 @@ class FruitScene extends Phaser.Scene {
     this.gameOverDebugLabel = this.add.text(
       DEBUG_VIEW_CONFIG.labelX,
       this.gameOverLineY - DEBUG_VIEW_CONFIG.labelCreateOffsetY,
-      'GAME OVER LIMIT',
+      t('debug.gameOverLimit'),
       {
       fontFamily: 'Nunito, sans-serif',
       fontSize: `${DEBUG_VIEW_CONFIG.fontSize}px`,
@@ -2392,13 +2425,13 @@ class FruitScene extends Phaser.Scene {
     this.removeFruit(second);
 
     this.score += gainedPoints;
-    ui.score.textContent = this.score.toLocaleString('ru-RU');
+    ui.score.textContent = formatNumber(this.score);
     const hasBrokenRecord = !this.recordSoundPlayed && this.score > this.bestScore;
     if (this.score > this.bestScore) {
       this.bestScore = this.score;
       saveBestScore(this.bestScore);
-      ui.hudBestScore.textContent = this.bestScore.toLocaleString('ru-RU');
-      ui.bestScore.textContent = this.bestScore.toLocaleString('ru-RU');
+      ui.hudBestScore.textContent = formatNumber(this.bestScore);
+      ui.bestScore.textContent = formatNumber(this.bestScore);
     }
     if (hasBrokenRecord) {
       this.recordSoundPlayed = true;
@@ -2483,7 +2516,7 @@ class FruitScene extends Phaser.Scene {
       });
     }
 
-    const pointsText = this.add.text(x, y - EFFECTS_CONFIG.pointsOffsetY, `+${points}`, {
+    const pointsText = this.add.text(x, y - EFFECTS_CONFIG.pointsOffsetY, '+' + formatNumber(points), {
       fontFamily: 'Nunito, sans-serif',
       fontSize: `${EFFECTS_CONFIG.pointsFontSize}px`,
       fontStyle: '900',
@@ -2856,14 +2889,17 @@ class FruitScene extends Phaser.Scene {
       ui.nextFish.style.background = next.cssColor;
       ui.nextFish.textContent = next.level;
     }
-    ui.nextFish.setAttribute('aria-label', `Следующая рыбка: уровень ${next.level}`);
+    ui.nextFish.setAttribute('aria-label', t('a11y.nextCharacter', { level: next.level }));
   }
 
   openMainMenu() {
     this.isMainMenuOpen = true;
-    ui.mainMenuWorld.textContent = this.world.name;
+    ui.mainMenuWorld.textContent = worldName(this.world);
     const collection = readCollectionLevels(this.world);
-    ui.mainMenuProgress.textContent = `${collection.size} / ${this.world.maxSupportedLevels} открыто`;
+    ui.mainMenuProgress.textContent = t('menu.progress', {
+      unlocked: formatNumber(collection.size),
+      total: formatNumber(this.world.maxSupportedLevels),
+    });
     ui.mainMenu.hidden = false;
     this.cancelCurrentFruitDrag();
     this.matter.world.pause();
@@ -2889,7 +2925,7 @@ class FruitScene extends Phaser.Scene {
     if (value) this.cancelCurrentFruitDrag();
     this.isPaused = value;
     ui.pauseModal.hidden = !value;
-    ui.pauseButton.setAttribute('aria-label', value ? 'Продолжить игру' : 'Пауза');
+    ui.pauseButton.setAttribute('aria-label', t(value ? 'a11y.resumeGame' : 'a11y.pause'));
     ui.pauseButton.classList.remove('is-bouncing');
     void ui.pauseButton.offsetWidth;
     ui.pauseButton.classList.add('is-bouncing');
@@ -2934,18 +2970,68 @@ class FruitScene extends Phaser.Scene {
       this.bestScore = this.score;
       saveBestScore(this.bestScore);
     }
-    ui.finalScore.textContent = this.score.toLocaleString('ru-RU');
-    ui.bestScore.textContent = this.bestScore.toLocaleString('ru-RU');
+    ui.finalScore.textContent = formatNumber(this.score);
+    ui.bestScore.textContent = formatNumber(this.bestScore);
     ui.newRecordBadge.hidden = !isNewRecord;
     ui.gameOver.hidden = false;
   }
 
+  // ======================== Локализация интерфейса ========================
+
+  refreshLocalizedInterface() {
+    applyTranslations();
+    ui.currentLanguageName.textContent = getLanguageLabel();
+    this.updateSoundToggleInterface();
+    this.updateAmbientToggleInterface();
+
+    ui.score.textContent = formatNumber(this.score);
+    ui.hudBestScore.textContent = formatNumber(this.bestScore);
+    ui.finalScore.textContent = formatNumber(this.score);
+    ui.bestScore.textContent = formatNumber(this.bestScore);
+    ui.pauseButton.setAttribute('aria-label', t(this.isPaused ? 'a11y.resumeGame' : 'a11y.pause'));
+
+    if (FRUITS[this.nextLevel]) this.updateNextPreview();
+    this.renderProgression();
+
+    ui.mainMenuWorld.textContent = worldName(this.world);
+    const collection = readCollectionLevels(this.world);
+    ui.mainMenuProgress.textContent = t('menu.progress', {
+      unlocked: formatNumber(collection.size),
+      total: formatNumber(this.world.maxSupportedLevels),
+    });
+
+    if (!ui.worldsModal.hidden) renderWorldCards();
+    if (!ui.atlasModal.hidden) this.renderAtlas();
+
+    const detailLevel = Number.parseInt(ui.fishDetailModal.dataset.level || '', 10);
+    const detailWorld = WORLDS[ui.fishDetailModal.dataset.world];
+    const detailCharacter = detailWorld?.characters[detailLevel];
+    if (!ui.fishDetailModal.hidden && detailCharacter) {
+      ui.fishDetailLevel.textContent = t('atlas.level', { level: detailCharacter.level });
+      ui.fishDetailName.textContent = characterName(detailCharacter);
+      ui.fishDetailCharacter.textContent = characterTrait(detailCharacter);
+      ui.fishDetailDescription.textContent = characterDescription(detailCharacter);
+      ui.fishDetailImage.alt = characterName(detailCharacter);
+    }
+
+    const unlockLevel = Number.parseInt(ui.fishUnlockModal.dataset.level || '', 10);
+    const unlockCharacter = FRUITS[unlockLevel];
+    if (!ui.fishUnlockModal.hidden && unlockCharacter) {
+      ui.fishUnlockName.textContent = characterName(unlockCharacter);
+      ui.fishUnlockDescription.textContent = characterDescription(unlockCharacter);
+      ui.fishUnlockImage.alt = characterName(unlockCharacter);
+    }
+
+    this.gameOverDebugLabel?.setText(t('debug.gameOverLimit'));
+    renderLanguageOptions();
+  }
+
   resetInterface() {
     ui.score.textContent = '0';
-    ui.hudBestScore.textContent = this.bestScore.toLocaleString('ru-RU');
+    ui.hudBestScore.textContent = formatNumber(this.bestScore);
     ui.finalScore.textContent = '0';
-    ui.bestScore.textContent = this.bestScore.toLocaleString('ru-RU');
-    ui.pauseButton.setAttribute('aria-label', 'Пауза');
+    ui.bestScore.textContent = formatNumber(this.bestScore);
+    ui.pauseButton.setAttribute('aria-label', t('a11y.pause'));
     ui.controlHint.classList.toggle('is-hidden', hasCompletedFirstDrop);
     ui.controlHint.setAttribute('aria-hidden', String(hasCompletedFirstDrop));
     ui.warning.classList.remove('is-visible');
@@ -2954,6 +3040,7 @@ class FruitScene extends Phaser.Scene {
     ui.worldsModal.hidden = true;
     ui.gameOver.hidden = true;
     ui.settingsModal.hidden = true;
+    ui.languageModal.hidden = true;
     ui.newRecordBadge.hidden = true;
     ui.atlasModal.hidden = true;
     ui.gameWrap.classList.remove('is-atlas-open');
@@ -2963,6 +3050,7 @@ class FruitScene extends Phaser.Scene {
     this.updateSoundToggleInterface();
     this.updateAmbientToggleInterface();
     this.renderProgression();
+    this.refreshLocalizedInterface();
     this.startAmbient();
   }
 }
@@ -3033,28 +3121,70 @@ function renderWorldCards() {
     previewWrap.style.backgroundImage = `linear-gradient(180deg, transparent 30%, rgba(0, 13, 44, .42)), url(${world.backgrounds.seabedPath})`;
     const preview = document.createElement('img');
     preview.src = world.characters[world.previewCharacterLevel - 1].texturePath;
-    preview.alt = world.name;
+    preview.alt = worldName(world);
     previewWrap.appendChild(preview);
     const title = document.createElement('h3');
-    title.textContent = world.name;
+    title.textContent = worldName(world);
     const description = document.createElement('p');
-    description.textContent = world.menuDescription;
+    description.textContent = worldDescription(world);
     const progress = document.createElement('span');
     progress.className = 'world-card-progress';
-    progress.textContent = `${collection.size} / ${world.maxSupportedLevels} открыто`;
+    progress.textContent = t('worlds.progress', {
+      unlocked: formatNumber(collection.size),
+      total: formatNumber(world.maxSupportedLevels),
+    });
     const selectedMark = document.createElement('span');
     selectedMark.className = 'world-card-selected-mark';
-    selectedMark.textContent = '✓ ВЫБРАНО';
+    selectedMark.textContent = t('worlds.selected');
     selectedMark.hidden = world.id !== activeWorldId;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'modal-button glass glass-button glass-button-secondary';
-    button.textContent = world.id === activeWorldId ? 'Выбрано' : 'Выбрать';
+    button.textContent = t(world.id === activeWorldId ? 'worlds.selectedButton' : 'worlds.selectButton');
     button.disabled = world.id === activeWorldId;
     button.addEventListener('click', () => selectWorld(world.id));
     card.append(previewWrap, selectedMark, title, description, progress, button);
     ui.worldsGrid.appendChild(card);
   });
+}
+
+function renderLanguageOptions() {
+  ui.currentLanguageName.textContent = getLanguageLabel();
+  ui.languageList.replaceChildren();
+  LANGUAGE_OPTIONS.forEach(({ locale, label }) => {
+    const button = document.createElement('button');
+    const isSelected = locale === getLocale();
+    button.type = 'button';
+    button.className = 'language-option glass glass-button glass-button-tertiary'
+      + (isSelected ? ' is-selected' : '');
+    button.dataset.locale = locale;
+    button.setAttribute('aria-pressed', String(isSelected));
+
+    const name = document.createElement('span');
+    name.textContent = label;
+    const mark = document.createElement('span');
+    mark.className = 'language-option-mark';
+    mark.textContent = isSelected ? '✓' : '';
+    mark.setAttribute('aria-hidden', 'true');
+
+    button.append(name, mark);
+    button.addEventListener('click', () => {
+      if (locale === getLocale()) return;
+      activeScene().playSound('button');
+      setLocale(locale);
+    });
+    ui.languageList.appendChild(button);
+  });
+}
+
+function openLanguageModal() {
+  activeScene().playSound('button');
+  renderLanguageOptions();
+  ui.languageModal.hidden = false;
+}
+
+function closeLanguageModal() {
+  ui.languageModal.hidden = true;
 }
 
 function openWorldsModal() {
@@ -3069,10 +3199,12 @@ function closeWorldsModal() {
 
 function openSettingsModal() {
   activeScene().playSound('button');
+  ui.currentLanguageName.textContent = getLanguageLabel();
   ui.settingsModal.hidden = false;
 }
 
 function closeSettingsModal() {
+  closeLanguageModal();
   ui.settingsModal.hidden = true;
 }
 
@@ -3147,6 +3279,11 @@ ui.worldsButton.addEventListener('click', openWorldsModal);
 ui.atlasButton.addEventListener('click', () => activeScene().openAtlas());
 ui.settingsButton.addEventListener('click', openSettingsModal);
 ui.pauseSettingsButton.addEventListener('click', openSettingsModal);
+ui.languageButton.addEventListener('click', openLanguageModal);
+ui.languageCloseButton.addEventListener('click', closeLanguageModal);
+ui.languageModal.addEventListener('click', (event) => {
+  if (event.target === ui.languageModal) closeLanguageModal();
+});
 ui.settingsCloseButton.addEventListener('click', closeSettingsModal);
 ui.settingsModal.addEventListener('click', (event) => {
   if (event.target === ui.settingsModal) closeSettingsModal();
@@ -3174,10 +3311,17 @@ ui.fishUnlockModal.addEventListener('click', () => activeScene().closeFishUnlock
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   const scene = activeScene();
-  if (!ui.settingsModal.hidden) closeSettingsModal();
+  if (!ui.languageModal.hidden) closeLanguageModal();
+  else if (!ui.settingsModal.hidden) closeSettingsModal();
   else if (!ui.worldsModal.hidden) closeWorldsModal();
   else if (!ui.fishDetailModal.hidden) scene.closeFishDetail();
   else if (!ui.atlasModal.hidden) scene.closeAtlas();
+});
+
+onLanguageChanged(() => {
+  const scene = activeScene();
+  if (scene?.scene?.isActive()) scene.refreshLocalizedInterface();
+  else renderLanguageOptions();
 });
 
 // Небольшой публичный объект помогает проверять состояние прототипа в консоли.

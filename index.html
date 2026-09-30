@@ -1,11 +1,15 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#087ec4" />
-    <meta name="description" content="Спокойная подводная merge-игра с разными мирами и персонажами" />
+    <meta name="description" content="A relaxing underwater merge game with unique worlds and characters" data-i18n-content="meta.description" />
     <title>BLOOP</title>
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/branding/icons/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/branding/icons/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/branding/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="./src/style.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,7 +17,7 @@
   </head>
   <body>
     <main class="app-shell">
-      <section id="game-wrap" class="game-wrap" aria-label="Подводное игровое поле">
+      <section id="game-wrap" class="game-wrap" aria-label="Underwater game field" data-i18n-aria-label="a11y.gameField">
         <div class="water-rays" aria-hidden="true"></div>
         <div class="ambient-bubbles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
         <div id="game-container"></div>
@@ -30,22 +34,22 @@
                 alt="BLOOP"
               />
             </h1>
-            <button id="play-button" class="modal-button glass glass-button glass-button-primary" type="button">ИГРАТЬ</button>
+            <button id="play-button" class="modal-button glass glass-button glass-button-primary" type="button" data-i18n="menu.play">Play</button>
             <div class="main-menu-actions">
               <button id="worlds-button" class="menu-section-button glass glass-button glass-button-secondary" type="button">
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="3.5"/><circle cx="17" cy="12" r="3.5"/><path d="M10.5 12h3M7 8.5V6.5M17 8.5V6.5"/></svg>
-                <span>МИРЫ</span>
+                <span data-i18n="menu.worlds">Worlds</span>
               </button>
               <button id="atlas-button" class="menu-section-button glass glass-button glass-button-secondary" type="button">
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5c3.2-.8 5.8-.2 8 1.6v12c-2.2-1.8-4.8-2.4-8-1.6v-12Z"/><path d="M20 5.5c-3.2-.8-5.8-.2-8 1.6v12c2.2-1.8 4.8-2.4 8-1.6v-12Z"/></svg>
-                <span>АТЛАС</span>
+                <span data-i18n="menu.atlas">Atlas</span>
               </button>
             </div>
             <div class="main-menu-utilities">
-              <button id="main-sound-toggle-button" class="glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Выключить звук" aria-pressed="true">
+              <button id="main-sound-toggle-button" class="glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Turn sound off" aria-pressed="true">
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path class="sound-wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
               </button>
-              <button id="settings-button" class="glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Настройки">
+              <button id="settings-button" class="glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Settings" data-i18n-aria-label="menu.settings">
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M7 14v6"/></svg>
               </button>
             </div>
@@ -58,47 +62,47 @@
 
         <div id="worlds-modal" class="modal worlds-modal" role="dialog" aria-modal="true" aria-labelledby="worlds-title" hidden>
           <section class="worlds-card glass glass-strong glass-panel glass-modal">
-            <button id="worlds-close-button" class="modal-close-button glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Закрыть выбор миров">×</button>
-            <span class="modal-kicker">ВЫБЕРИТЕ ПОДВОДНЫЙ МИР</span>
-            <h2 id="worlds-title">МИРЫ</h2>
+            <button id="worlds-close-button" class="modal-close-button glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Close world selection" data-i18n-aria-label="a11y.closeWorlds">×</button>
+            <span class="modal-kicker" data-i18n="worlds.kicker">Choose an underwater world</span>
+            <h2 id="worlds-title" data-i18n="worlds.title">Worlds</h2>
             <div id="worlds-grid" class="worlds-grid"></div>
           </section>
         </div>
 
         <header class="hud">
           <div class="hud-stat next-bubble glass glass-hud" data-game-ui>
-            <span class="hud-label">СЛЕДУЮЩАЯ</span>
-            <div id="next-fruit" class="next-fruit" aria-label="Следующая рыбка"></div>
+            <span class="hud-label" data-i18n="hud.next">Next</span>
+            <div id="next-fruit" class="next-fruit" aria-label="Next character"></div>
           </div>
 
           <div class="hud-stat score-bubble glass glass-hud" data-game-ui aria-live="polite">
-            <span class="hud-label">СЧЁТ</span>
+            <span class="hud-label" data-i18n="hud.score">Score</span>
             <strong id="score">0</strong>
           </div>
 
           <div class="hud-stat best-bubble glass glass-hud" data-game-ui aria-live="polite">
-            <span class="hud-label">ЛУЧШИЙ</span>
+            <span class="hud-label" data-i18n="hud.best">Best</span>
             <strong id="hud-best-score">0</strong>
           </div>
 
-          <button id="pause-button" class="pause-button glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Пауза">
+          <button id="pause-button" class="pause-button glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Pause" data-i18n-aria-label="a11y.pause">
             <span></span><span></span>
           </button>
 
         </header>
 
-        <div id="warning" class="warning" role="status">Рыбкам становится тесно</div>
+        <div id="warning" class="warning" role="status" data-i18n="hud.warning">The characters are running out of room</div>
 
-        <div id="progression" class="progression" data-game-ui aria-label="Открытые уровни рыбок"></div>
-        <p id="control-hint" class="hint">Удерживайте и двигайте · отпустите, чтобы запустить</p>
+        <div id="progression" class="progression" data-game-ui aria-label="Unlocked character levels" data-i18n-aria-label="a11y.progression"></div>
+        <p id="control-hint" class="hint" data-i18n="hud.controlHint">Hold and drag · release to launch</p>
 
         <div id="atlas-modal" class="modal atlas-modal" role="dialog" aria-modal="true" aria-labelledby="atlas-title" hidden>
           <section class="atlas-card glass glass-strong glass-panel glass-modal">
-            <button id="atlas-close-button" class="modal-close-button glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Закрыть атлас">×</button>
-            <span class="modal-kicker">КОЛЛЕКЦИЯ ПОДВОДНЫХ МИРОВ</span>
-            <h2 id="atlas-title">ПОДВОДНЫЙ АТЛАС</h2>
-            <div id="atlas-world-tabs" class="atlas-world-tabs" aria-label="Выбор мира атласа"></div>
-            <div id="atlas-grid" class="atlas-grid" aria-label="Коллекция рыб"></div>
+            <button id="atlas-close-button" class="modal-close-button glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Close Atlas" data-i18n-aria-label="a11y.closeAtlas">×</button>
+            <span class="modal-kicker" data-i18n="atlas.kicker">Collection of underwater worlds</span>
+            <h2 id="atlas-title" data-i18n="atlas.title">Underwater Atlas</h2>
+            <div id="atlas-world-tabs" class="atlas-world-tabs" aria-label="Choose an Atlas world" data-i18n-aria-label="a11y.atlasWorlds"></div>
+            <div id="atlas-grid" class="atlas-grid" aria-label="Character collection" data-i18n-aria-label="a11y.atlasCollection"></div>
           </section>
         </div>
 
@@ -109,17 +113,17 @@
             <h2 id="fish-detail-name"></h2>
             <p id="fish-detail-character" class="fish-detail-character"></p>
             <p id="fish-detail-description" class="fish-detail-description"></p>
-            <button id="fish-detail-close-button" class="modal-button glass glass-button glass-button-primary" type="button">Закрыть</button>
+            <button id="fish-detail-close-button" class="modal-button glass glass-button glass-button-primary" type="button" data-i18n="atlas.detailClose">Close</button>
           </section>
         </div>
 
         <div id="fish-unlock-modal" class="modal fish-unlock-modal" role="dialog" aria-modal="true" aria-labelledby="fish-unlock-title" hidden>
           <section class="fish-unlock-card glass glass-strong glass-panel glass-modal">
-            <span id="fish-unlock-title" class="fish-unlock-kicker">НОВАЯ РЫБА!</span>
+            <span id="fish-unlock-title" class="fish-unlock-kicker" data-i18n="atlas.newCharacter">New character!</span>
             <img id="fish-unlock-image" class="fish-unlock-image" src="" alt="" />
             <h2 id="fish-unlock-name"></h2>
             <p id="fish-unlock-description"></p>
-            <span class="fish-unlock-hint">Коснитесь, чтобы закрыть</span>
+            <span class="fish-unlock-hint" data-i18n="atlas.tapToClose">Tap to close</span>
           </section>
         </div>
 
@@ -135,45 +139,59 @@
               />
             </h1>
             <div class="modal-card glass glass-strong glass-panel glass-modal pause-card">
-              <button id="continue-button" class="modal-button glass glass-button glass-button-primary" type="button">ПРОДОЛЖИТЬ</button>
-              <button id="pause-restart-button" class="modal-button glass glass-button glass-button-secondary" type="button">ЗАНОВО</button>
-              <button id="pause-worlds-button" class="modal-button glass glass-button glass-button-secondary pause-worlds-button" type="button">ВЫБРАТЬ МИР</button>
-              <button id="pause-settings-button" class="modal-button glass glass-button glass-button-tertiary" type="button">НАСТРОЙКИ</button>
+              <button id="continue-button" class="modal-button glass glass-button glass-button-primary" type="button" data-i18n="pause.continue">Continue</button>
+              <button id="pause-restart-button" class="modal-button glass glass-button glass-button-secondary" type="button" data-i18n="pause.restart">Restart</button>
+              <button id="pause-worlds-button" class="modal-button glass glass-button glass-button-secondary pause-worlds-button" type="button" data-i18n="pause.selectWorld">Choose world</button>
+              <button id="pause-settings-button" class="modal-button glass glass-button glass-button-tertiary" type="button" data-i18n="pause.settings">Settings</button>
             </div>
           </section>
         </div>
 
         <div id="settings-modal" class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
           <section class="modal-card settings-card glass glass-strong glass-panel glass-modal">
-            <span class="modal-kicker">ЗВУК И АТМОСФЕРА</span>
-            <h2 id="settings-title">НАСТРОЙКИ</h2>
-            <button id="sound-toggle-button" class="settings-option glass glass-button glass-button-tertiary sound-toggle-button" type="button" aria-pressed="true" aria-label="Выключить звук">
+            <span class="modal-kicker" data-i18n="settings.kicker">Sound and ambience</span>
+            <h2 id="settings-title" data-i18n="settings.title">Settings</h2>
+            <button id="sound-toggle-button" class="settings-option glass glass-button glass-button-tertiary sound-toggle-button" type="button" aria-pressed="true" aria-label="Turn sound off">
               <svg class="sound-toggle-icon sound-toggle-icon-on ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/></svg>
               <svg class="sound-toggle-icon sound-toggle-icon-off ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="m16 9 5 5m0-5-5 5"/></svg>
-              <span class="settings-option-copy"><strong id="sound-toggle-text">ЗВУК</strong><small>Эффекты и кнопки</small></span>
+              <span class="settings-option-copy"><strong id="sound-toggle-text" data-i18n="settings.sound">Sound</strong><small data-i18n="settings.soundDescription">Effects and buttons</small></span>
               <span class="game-toggle" aria-hidden="true"><i></i></span>
             </button>
-            <button id="ambient-toggle-button" class="settings-option glass glass-button glass-button-tertiary sound-toggle-button ambient-toggle-button" type="button" aria-pressed="true" aria-label="Выключить атмосферу">
+            <button id="ambient-toggle-button" class="settings-option glass glass-button glass-button-tertiary sound-toggle-button ambient-toggle-button" type="button" aria-pressed="true" aria-label="Turn ambience off">
               <svg class="sound-toggle-icon sound-toggle-icon-on ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8c2.2-2 4.3-2 6.5 0s4.3 2 6.5 0 4.3-2 6.5 0M3 13c2.2-2 4.3-2 6.5 0s4.3 2 6.5 0 4.3-2 6.5 0"/></svg>
               <svg class="sound-toggle-icon sound-toggle-icon-off ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8c2.2-2 4.3-2 6.5 0s4.3 2 6.5 0 4.3-2 6.5 0"/><path d="m16 16 5 5m0-5-5 5"/></svg>
-              <span class="settings-option-copy"><strong id="ambient-toggle-text">ОКРУЖЕНИЕ</strong><small>Подводная атмосфера</small></span>
+              <span class="settings-option-copy"><strong id="ambient-toggle-text" data-i18n="settings.ambient">Ambience</strong><small data-i18n="settings.ambientDescription">Underwater atmosphere</small></span>
               <span class="game-toggle" aria-hidden="true"><i></i></span>
             </button>
-            <button id="settings-close-button" class="modal-button settings-done-button glass glass-button glass-button-secondary" type="button">ЗАКРЫТЬ</button>
+            <button id="language-button" class="settings-option language-settings-button glass glass-button glass-button-tertiary" type="button">
+              <svg class="sound-toggle-icon ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.7 5.5 3.7 9S14.5 18.5 12 21M12 3C9.5 5.5 8.3 8.5 8.3 12S9.5 18.5 12 21"/></svg>
+              <span class="settings-option-copy"><strong data-i18n="settings.language">Language</strong><small id="current-language-name">English</small></span>
+              <svg class="language-chevron ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+            </button>
+            <button id="settings-close-button" class="modal-button settings-done-button glass glass-button glass-button-secondary" type="button" data-i18n="settings.close">Close</button>
+          </section>
+        </div>
+
+        <div id="language-modal" class="modal language-modal" role="dialog" aria-modal="true" aria-labelledby="language-title" hidden>
+          <section class="modal-card language-card glass glass-strong glass-panel glass-modal">
+            <button id="language-close-button" class="modal-close-button glass glass-button glass-icon-button glass-button-tertiary" type="button" aria-label="Close language selection" data-i18n-aria-label="a11y.closeLanguage">×</button>
+            <span class="modal-kicker" data-i18n="language.kicker">Interface language</span>
+            <h2 id="language-title" data-i18n="language.title">Language</h2>
+            <div id="language-list" class="language-list"></div>
           </section>
         </div>
 
         <div id="game-over" class="modal" hidden>
           <div class="modal-card glass glass-strong glass-panel glass-modal game-over-card">
-            <span class="modal-kicker">ПОВЕРХНОСТЬ ЗАПОЛНЕНА</span>
-            <h2>ИГРА ОКОНЧЕНА</h2>
-            <span id="new-record-badge" class="new-record-badge glass glass-tertiary" hidden>НОВЫЙ РЕКОРД</span>
+            <span class="modal-kicker" data-i18n="gameOver.kicker">The surface is full</span>
+            <h2 data-i18n="gameOver.title">Game over</h2>
+            <span id="new-record-badge" class="new-record-badge glass glass-tertiary" data-i18n="gameOver.newRecord" hidden>New record</span>
             <div class="results">
-              <div><span>СЧЁТ</span><strong id="final-score">0</strong></div>
-              <div><span>ЛУЧШИЙ</span><strong id="best-score">0</strong></div>
+              <div><span data-i18n="hud.score">Score</span><strong id="final-score">0</strong></div>
+              <div><span data-i18n="hud.best">Best</span><strong id="best-score">0</strong></div>
             </div>
-            <button id="restart-button" class="modal-button glass glass-button glass-button-primary" type="button">ЕЩЁ РАЗ</button>
-            <button id="game-over-menu-button" class="modal-button glass glass-button glass-button-tertiary" type="button">В МЕНЮ</button>
+            <button id="restart-button" class="modal-button glass glass-button glass-button-primary" type="button" data-i18n="gameOver.retry">Play again</button>
+            <button id="game-over-menu-button" class="modal-button glass glass-button glass-button-tertiary" type="button" data-i18n="gameOver.menu">Main menu</button>
           </div>
         </div>
       </section>
