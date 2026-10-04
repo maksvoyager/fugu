@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/bloop_water" />
+    <!-- Копия исходного логотипа; пропорции 1713:460, без новой графики. -->
+    <item android:width="268dp" android:height="72dp" android:gravity="center">
+        <bitmap android:src="@drawable/bloop_logo" android:gravity="fill" android:filter="true" />
+    </item>
+</layer-list>

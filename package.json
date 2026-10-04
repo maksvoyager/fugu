@@ -6,6 +6,25 @@
   "scripts": {
     "dev": "node server.mjs",
     "start": "node server.mjs",
-    "check": "node --check src/game.js && node --check src/fruits.js && node --check src/worlds.js && node --check src/i18n/index.js && node scripts/check-i18n.mjs && node --check server.mjs"
+    "check": "node --check src/game.js && node --check src/fruits.js && node --check src/worlds.js && node --check src/i18n/index.js && node scripts/check-i18n.mjs && node --check server.mjs && node --check src/native-app.js && node --check scripts/build-web.mjs && node --check scripts/android-build.mjs && node --check scripts/check-android.mjs && node scripts/check-android.mjs && node scripts/check-native-app.mjs",
+    "build": "node scripts/build-web.mjs",
+    "android:sync": "node scripts/build-web.mjs && cap sync android",
+    "android:open": "cap open android",
+    "android:run": "node scripts/build-web.mjs && cap sync android && cap run android",
+    "android:check": "node scripts/check-android.mjs && cap doctor android",
+    "android:debug": "node scripts/build-web.mjs && cap sync android && node scripts/android-build.mjs assembleDebug",
+    "android:bundle": "node scripts/build-web.mjs && cap sync android && node scripts/android-build.mjs bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/splash-screen": "8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

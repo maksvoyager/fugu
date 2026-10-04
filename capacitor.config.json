@@ -1,0 +1,27 @@
+{
+  "appId": "com.voyager.bloop",
+  "appName": "BLOOP",
+  "webDir": "www",
+  "backgroundColor": "#087ec4",
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#087ec4"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "disable",
+      "initialViewportFitValueHint": "cover",
+      "style": "DARK",
+      "hidden": true
+    },
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "launchFadeOutDuration": 180,
+      "backgroundColor": "#087ec4",
+      "androidSplashResourceName": "bloop_splash",
+      "androidScaleType": "FIT_CENTER",
+      "showSpinner": false
+    }
+  }
+}

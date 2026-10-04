@@ -9,7 +9,7 @@ export const STARTING_LEVELS = 1;
 // ---------- Баланс, вода и Game Over ----------
 export const GAMEPLAY = {
   // Скорость и сопротивление воды.
-  riseSpeedMultiplier: 1.5,
+  riseSpeedMultiplier: 3,
   buoyancyForce: -0.000264,
   surfaceFadeDistance: 110,
   waterDrag: 0.045,

@@ -1,4 +1,5 @@
 import { STARTING_LEVELS, GAMEPLAY, PROGRESS_UI } from './fruits.js';
+import { initializeNativeApp, hideNativeSplash, disposeNativeApp } from './native-app.js';
 import {
   WORLDS,
   LEGACY_COLLECTION_KEY,
@@ -493,6 +494,20 @@ const ui = {
 
 const warnedProgressAssets = new Set();
 const warnedAtlasAssets = new Set();
+// Два ближайших PNG: прогреваем DOM decode, не держим вторую коллекцию текстур.
+const preparedUnlockImages = new Map();
+function prepareUnlockImage(path) {
+  if (preparedUnlockImages.has(path)) return preparedUnlockImages.get(path).ready;
+  const image = new Image();
+  image.src = path;
+  const ready = (image.decode ? image.decode() : new Promise((resolve) => {
+    if (image.complete) resolve();
+    else { image.onload = resolve; image.onerror = resolve; }
+  })).catch(() => {});
+  preparedUnlockImages.set(path, { image, ready });
+  if (preparedUnlockImages.size > 2) preparedUnlockImages.delete(preparedUnlockImages.keys().next().value);
+  return ready;
+}
 let warnedMissingLevelOneAnimation = false;
 const warnedMissingDepthAssets = new Set();
 // Флаг живёт до перезагрузки страницы и не сбрасывается при рестарте Phaser-сцены.
@@ -753,6 +768,8 @@ class FruitScene extends Phaser.Scene {
       );
     }
     this.resetInterface();
+    this.unlockRevealRevision = (this.unlockRevealRevision || 0) + 1;
+    if (FRUITS[1]) void prepareUnlockImage(FRUITS[1].texturePath);
     this.createBackdrop();
     this.startSharkCycle();
     this.scale.on('resize', this.handleGameResize, this);
@@ -768,6 +785,7 @@ class FruitScene extends Phaser.Scene {
     window.addEventListener('touchcancel', this.handlePointerCancel, { passive: false });
     window.addEventListener('blur', this.handleWindowBlur);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.unlockRevealRevision += 1;
       this.disposeWorldCharacterEffectsForShutdown();
       this.scale.off('resize', this.handleGameResize, this);
       window.removeEventListener('pointerup', this.handleWindowPointerUp);
@@ -825,6 +843,8 @@ class FruitScene extends Phaser.Scene {
     } else {
       this.openMainMenu();
     }
+    // Заставка скрывается после готовности сцены и первого отрисованного кадра.
+    this.game.events.once(Phaser.Core.Events.POST_RENDER, () => { void hideNativeSplash(); });
   }
 
   // ======================== Звуки ========================
@@ -962,7 +982,7 @@ class FruitScene extends Phaser.Scene {
   }
 
   playSound(name) {
-    if (!this.soundEnabled) return false;
+    if (!this.soundEnabled || this.nativeInBackground) return false;
     const sound = this.sounds?.[name];
     if (!sound) return false;
     if (this.sound?.mute) return false;
@@ -1071,6 +1091,7 @@ class FruitScene extends Phaser.Scene {
   }
 
   startAmbient() {
+    if (this.nativeInBackground) return false;
     if (!this.ambientSound || !this.soundEnabled || !this.ambientEnabled || !this.audioUnlocked) return false;
     if (document.hidden || this.sound?.mute) return false;
     const context = this.sound?.context;
@@ -1379,12 +1400,16 @@ class FruitScene extends Phaser.Scene {
     ui.fishDetailModal.hidden = true;
   }
 
-  showFishUnlock(levelIndex) {
+  async showFishUnlock(levelIndex) {
     const fishData = FISH_DATA[levelIndex];
     if (!fishData) return;
 
     window.clearTimeout(this.unlockDismissTimer);
     window.clearTimeout(this.unlockAutoCloseTimer);
+    const revealRevision = ++this.unlockRevealRevision;
+    ui.fishUnlockModal.hidden = true;
+    await prepareUnlockImage(FRUITS[levelIndex].texturePath);
+    if (revealRevision !== this.unlockRevealRevision) return;
     this.configureAtlasImage(
       ui.fishUnlockImage,
       FRUITS[levelIndex].texturePath,
@@ -1395,6 +1420,11 @@ class FruitScene extends Phaser.Scene {
     ui.fishUnlockDescription.textContent = characterDescription(fishData);
     ui.fishUnlockModal.dataset.level = String(levelIndex);
     ui.fishUnlockModal.classList.remove('can-dismiss');
+    // Изображение и текст готовятся в скрытой переиспользуемой карточке.
+    // Отделяем её композицию от merge/VFX; layout не измеряем после CSS-записей.
+    if (ui.fishUnlockImage.decode) await ui.fishUnlockImage.decode().catch(() => {});
+    await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+    if (revealRevision !== this.unlockRevealRevision || this.gameEnded || this.nativeInBackground) return;
     ui.fishUnlockModal.hidden = false;
     this.unlockCanDismissAt = performance.now() + ATLAS_CONFIG.unlockDismissDelay;
     this.unlockDismissTimer = window.setTimeout(() => {
@@ -1407,12 +1437,15 @@ class FruitScene extends Phaser.Scene {
   }
 
   closeFishUnlock(force = false) {
+    if (force) this.unlockRevealRevision += 1;
     if (ui.fishUnlockModal.hidden) return;
     if (!force && performance.now() < this.unlockCanDismissAt) return;
     window.clearTimeout(this.unlockDismissTimer);
     window.clearTimeout(this.unlockAutoCloseTimer);
     ui.fishUnlockModal.hidden = true;
     ui.fishUnlockModal.classList.remove('can-dismiss');
+    const nextCharacter = FRUITS[Number(ui.fishUnlockModal.dataset.level) + 1];
+    if (nextCharacter) void prepareUnlockImage(nextCharacter.texturePath);
   }
 
   // ======================== Служебные QA-сценарии ========================
@@ -3308,15 +3341,77 @@ ui.fishDetailModal.addEventListener('click', (event) => {
   if (event.target === ui.fishDetailModal) activeScene().closeFishDetail();
 });
 ui.fishUnlockModal.addEventListener('click', () => activeScene().closeFishUnlock());
-document.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape') return;
+// Единый возврат из внутренних экранов для Escape и Android Back.
+function closeTopModal(includeUnlock = false) {
   const scene = activeScene();
   if (!ui.languageModal.hidden) closeLanguageModal();
   else if (!ui.settingsModal.hidden) closeSettingsModal();
   else if (!ui.worldsModal.hidden) closeWorldsModal();
   else if (!ui.fishDetailModal.hidden) scene.closeFishDetail();
   else if (!ui.atlasModal.hidden) scene.closeAtlas();
+  else if (includeUnlock && !ui.fishUnlockModal.hidden) scene.closeFishUnlock(true);
+  else return false;
+  return true;
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeTopModal();
 });
+
+// ---------- Android lifecycle: текущая пауза, аудио и Phaser loop ----------
+let nativeSuspendedState = null;
+void initializeNativeApp({
+  onBackground() {
+    if (nativeSuspendedState) return;
+    const scene = activeScene();
+    const ready = scene?.scene?.isActive();
+    if (ready) {
+      // Поздно завершившийся unlock AudioContext не должен запускать звук в фоне.
+      scene.nativeInBackground = true;
+      scene.cancelCurrentFruitDrag();
+      if (!scene.isMainMenuOpen && !scene.gameEnded && !scene.isPaused) scene.setPaused(true);
+      scene.pauseAmbient();
+      Object.values(scene.sounds || {}).forEach((sound) => sound?.stop());
+      scene.refreshAudioContextState(true);
+      scene.matter.world.pause();
+      nativeSuspendedState = {
+        scene,
+        timePaused: scene.time.paused,
+        tweensPaused: scene.tweens.paused,
+      };
+      scene.time.paused = true;
+      scene.tweens.pauseAll();
+    } else {
+      nativeSuspendedState = { scene: null };
+    }
+    // wake() сбрасывает измерение времени, поэтому нет большого timestep после возврата.
+    game.loop.sleep();
+  },
+  onForeground() {
+    if (!nativeSuspendedState) return;
+    const suspended = nativeSuspendedState;
+    nativeSuspendedState = null;
+    if (suspended.scene) {
+      suspended.scene.nativeInBackground = false;
+      suspended.scene.time.paused = suspended.timePaused;
+      if (!suspended.tweensPaused) suspended.scene.tweens.resumeAll();
+      suspended.scene.refreshAudioContextState(true);
+    }
+    game.loop.wake();
+    resizeGameToViewport();
+    // Продолжение партии и разблокировка аудио происходят по действию пользователя.
+  },
+  onBack() {
+    if (closeTopModal(true)) return true;
+    const scene = activeScene();
+    if (!scene?.scene?.isActive()) return true;
+    if (scene.isMainMenuOpen) return false;
+    if (scene.gameEnded || scene.isPaused) returnToMainMenu();
+    else scene.setPaused(true);
+    return true;
+  },
+});
+game.events.once(Phaser.Core.Events.DESTROY, () => { void disposeNativeApp(); });
 
 onLanguageChanged(() => {
   const scene = activeScene();

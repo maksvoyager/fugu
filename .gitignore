@@ -1,0 +1,21 @@
+# Установленные зависимости и автоматически собранный web-каталог.
+node_modules/
+.pnpm-store/
+www/
+
+# Локальные настройки и результаты Android-сборок.
+android/local.properties
+android/.gradle/
+android/**/build/
+android/.idea/
+android/captures/
+*.iml
+
+# Ключи подписи и секреты никогда не входят в репозиторий.
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+.env
+.env.*
+!.env.example

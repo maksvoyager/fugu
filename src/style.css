@@ -59,6 +59,7 @@
   --sound-toggle-gap: 10px;
   --sound-toggle-icon-size: 22px;
   --sound-toggle-off-opacity: .76;
+  --settings-row-gap: 12px;
 
   /* ---------- CSS-анимации и эффекты ---------- */
   --button-transition-duration: .16s;
@@ -989,12 +990,14 @@ button { font: inherit; }
 .pause-card .modal-button:first-child { margin-top: 0; }
 .settings-modal { z-index: 100; }
 .settings-card { position: relative; text-align: center; }
+/* Общий вертикальный ритм для всех настроек, включая длинные переводы. */
+.settings-options { display: flex; flex-direction: column; gap: var(--settings-row-gap); }
 .sound-toggle-button { min-height: 52px; }
 .sound-toggle-icon { width: 21px; height: 21px; filter: none; }
 .settings-option { display: grid; width: 100%; min-height: 66px; grid-template-columns: 26px minmax(0, 1fr) 52px; gap: 12px; padding: 10px 12px; text-align: left; }
 .settings-option-copy { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 2px; }
 .settings-option-copy strong { font-size: 12px; letter-spacing: .06em; }
-.settings-option-copy small { font-size: 9px; font-weight: 700; letter-spacing: 0; opacity: .66; }
+.settings-option-copy small { font-size: 9px; line-height: 1.4; font-weight: 700; letter-spacing: 0; opacity: .66; }
 .game-toggle { position: relative; display: block; width: 52px; height: 30px; border: 1px solid rgba(220,247,255,.35); border-radius: 999px; background: rgba(19,55,104,.28); box-shadow: inset 0 2px 7px rgba(0,20,70,.18); transition: background-color 160ms ease, box-shadow 160ms ease; }
 .game-toggle i { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(180deg, #fff, #bcd9ed); box-shadow: inset 0 1px 0 #fff, 0 2px 7px rgba(0,20,65,.32); transition: transform 160ms ease, box-shadow 160ms ease; }
 .settings-option[aria-pressed='true'] .game-toggle { background: rgba(var(--ui-accent-rgb), .52); box-shadow: inset 0 2px 7px rgba(0,84,160,.18), 0 0 12px rgba(var(--ui-accent-rgb), .22); }

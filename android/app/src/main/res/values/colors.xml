@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Цвет уже используется в web theme-color BLOOP. -->
+    <color name="bloop_water">#087EC4</color>
+</resources>
