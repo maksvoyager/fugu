@@ -14,6 +14,8 @@ import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
     private Insets safeInsets = Insets.NONE;
+    private Insets publishedInsets = null;
+    private float publishedDensity = 0;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -28,17 +30,18 @@ public class MainActivity extends BridgeActivity {
         webView.setOnLongClickListener(view -> true);
         // Safe area относится только к HTML UI, не к размеру WebView/фона.
         ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (view, insets) -> {
-            view.setPadding(0, 0, 0, 0);
+            if (view.getPaddingLeft() != 0 || view.getPaddingTop() != 0
+                || view.getPaddingRight() != 0 || view.getPaddingBottom() != 0) view.setPadding(0, 0, 0, 0);
             safeInsets = insets.getInsets(WindowInsetsCompat.Type.displayCutout()
                 | WindowInsetsCompat.Type.systemBars());
-            updateSafeArea();
+            updateSafeArea(false);
             return new WindowInsetsCompat.Builder(insets)
                 .setInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout(), Insets.NONE)
                 .build();
         });
         getBridge().addWebViewListener(new WebViewListener() {
             @Override public void onPageLoaded(WebView view) {
-                updateSafeArea();
+                updateSafeArea(true);
                 applyImmersiveMode();
             }
         });
@@ -49,10 +52,13 @@ public class MainActivity extends BridgeActivity {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             WindowManager.LayoutParams attributes = getWindow().getAttributes();
-            attributes.layoutInDisplayCutoutMode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            int cutoutMode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
                 ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
                 : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-            getWindow().setAttributes(attributes);
+            if (attributes.layoutInDisplayCutoutMode != cutoutMode) {
+                attributes.layoutInDisplayCutoutMode = cutoutMode;
+                getWindow().setAttributes(attributes);
+            }
         }
         WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
@@ -60,9 +66,13 @@ public class MainActivity extends BridgeActivity {
         ViewCompat.requestApplyInsets(getWindow().getDecorView());
     }
 
-    private void updateSafeArea() {
+    private void updateSafeArea(boolean force) {
         if (getBridge() == null) return;
         float density = getResources().getDisplayMetrics().density;
+        // Повторные dispatch одинаковых insets не запускают JS и CSS/layout повторно.
+        if (!force && safeInsets.equals(publishedInsets) && density == publishedDensity) return;
+        publishedInsets = safeInsets;
+        publishedDensity = density;
         String script = "(() => { const s = document.documentElement.style;"
             + "s.setProperty('--safe-area-inset-top','" + safeInsets.top / density + "px');"
             + "s.setProperty('--safe-area-inset-right','" + safeInsets.right / density + "px');"

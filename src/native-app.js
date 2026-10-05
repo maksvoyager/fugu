@@ -9,6 +9,8 @@ let listenerHandles = [];
 
 export async function initializeNativeApp({ onBackground, onForeground, onBack }) {
   if (!isAndroidApp() || initialized) return;
+  // Общий CSS: только дорогие nested blur получают native fallback, не отдельную копию UI.
+  document.documentElement.classList.add('native-android');
   initialized = true;
   const app = window.Capacitor.Plugins?.App;
   if (!app) {

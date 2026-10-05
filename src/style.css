@@ -148,6 +148,12 @@ button { font: inherit; }
 
 /* Safari учитывает touch-action всех предков: разрешаем pan только открытому Атласу. */
 .game-wrap.is-atlas-open { touch-action: pan-y; }
+/* За полноэкранным атласом не композируем скрытые HUD/меню и движущиеся декорации. */
+.is-atlas-open .main-menu,
+.is-atlas-open .hud,
+.is-main-menu-open .hud { visibility: hidden; }
+.is-atlas-open .water-rays,
+.is-atlas-open .ambient-bubbles i { animation-play-state: paused; }
 
 .game-wrap.world-jellyfish {
   background:
@@ -1051,13 +1057,26 @@ button { font: inherit; }
 .atlas-card {
   width: min(100%, 500px);
   padding: 20px 14px 14px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 30px;
   touch-action: pan-y;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
+.atlas-scroll { min-height: 0; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.atlas-scroll::-webkit-scrollbar { display: none; }
+.atlas-card > #atlas-close-button { z-index: 5; width: 44px; height: 44px; min-width: 44px; min-height: 44px; touch-action: manipulation; }
+/* Одна стеклянная панель вместо цепочки fullscreen blur → panel blur → control blur. */
+.native-android .main-menu,
+.native-android .atlas-modal { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.native-android .atlas-card .glass,
+.native-android .settings-card .glass,
+.native-android .worlds-card .glass,
+.native-android .language-card .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.native-android .game-wrap.is-main-menu-open .water-rays,
+.native-android .game-wrap.is-main-menu-open .ambient-bubbles i { animation-play-state: paused; }
 .atlas-world-tabs { gap: 8px; }
 .atlas-world-tab { min-height: 38px; padding: 7px 9px; font-size: 10px; }
 .atlas-world-tab.is-selected { border-color: rgba(255,255,255,.5); background-color: rgba(var(--ui-accent-rgb), .28); }

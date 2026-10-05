@@ -494,6 +494,9 @@ const ui = {
 
 const warnedProgressAssets = new Set();
 const warnedAtlasAssets = new Set();
+// DOM атласа живёт между restart сцены; обработчики делегированы общим контейнерам.
+const atlasViewCache = new Map();
+const atlasTabCache = new Map();
 // Два ближайших PNG: прогреваем DOM decode, не держим вторую коллекцию текстур.
 const preparedUnlockImages = new Map();
 function prepareUnlockImage(path) {
@@ -768,6 +771,10 @@ class FruitScene extends Phaser.Scene {
       );
     }
     this.resetInterface();
+    // Подготовка скрытых карточек после первого кадра меню: без ожидания всех decode.
+    this.atlasPrepareFrame = window.requestAnimationFrame(() => {
+      if (this.isMainMenuOpen && ui.atlasModal.hidden) this.renderAtlas();
+    });
     this.unlockRevealRevision = (this.unlockRevealRevision || 0) + 1;
     if (FRUITS[1]) void prepareUnlockImage(FRUITS[1].texturePath);
     this.createBackdrop();
@@ -785,6 +792,7 @@ class FruitScene extends Phaser.Scene {
     window.addEventListener('touchcancel', this.handlePointerCancel, { passive: false });
     window.addEventListener('blur', this.handleWindowBlur);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.cancelAnimationFrame(this.atlasPrepareFrame);
       this.unlockRevealRevision += 1;
       this.disposeWorldCharacterEffectsForShutdown();
       this.scale.off('resize', this.handleGameResize, this);
@@ -1270,32 +1278,63 @@ class FruitScene extends Phaser.Scene {
   }
 
   renderAtlas() {
-    ui.atlasGrid.replaceChildren();
-    ui.atlasWorldTabs.replaceChildren();
     const atlasWorld = WORLDS[this.atlasWorldId] || this.world;
     const atlasCollection = readCollectionLevels(atlasWorld);
 
     Object.values(WORLDS).forEach((world) => {
-      const tab = document.createElement('button');
-      tab.type = 'button';
-      tab.className = `atlas-world-tab glass glass-button glass-button-tertiary${world.id === atlasWorld.id ? ' is-selected' : ''}`;
-      tab.textContent = worldName(world);
-      tab.addEventListener('click', () => {
-        this.playSound('button');
-        this.atlasWorldId = world.id;
-        this.renderAtlas();
-      });
-      ui.atlasWorldTabs.appendChild(tab);
+      let tab = atlasTabCache.get(world.id);
+      if (!tab) {
+        tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = 'atlas-world-tab glass glass-button glass-button-tertiary';
+        tab.dataset.world = world.id;
+        atlasTabCache.set(world.id, tab);
+        ui.atlasWorldTabs.appendChild(tab);
+      }
+      tab.classList.toggle('is-selected', world.id === atlasWorld.id);
+      const label = worldName(world);
+      if (tab.textContent !== label) tab.textContent = label;
     });
 
+    let view = atlasViewCache.get(atlasWorld.id);
+    if (!view) {
+      view = { rows: [], nodes: [] };
+      atlasViewCache.set(atlasWorld.id, view);
+    }
     atlasWorld.characters.forEach((fishData, levelIndex) => {
       const isUnlocked = atlasCollection.has(levelIndex);
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = `atlas-fish-card${isUnlocked ? ' is-unlocked' : ' is-locked'}`;
+      let row = view.rows[levelIndex];
+      if (!row) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'atlas-fish-card';
+        card.dataset.levelIndex = String(levelIndex);
+        card.style.setProperty('--atlas-index', String(levelIndex));
+        const imageWrap = document.createElement('span');
+        imageWrap.className = 'atlas-fish-image-wrap';
+        const image = document.createElement('img');
+        image.className = 'atlas-fish-image';
+        image.decoding = 'async';
+        imageWrap.appendChild(image);
+        const name = document.createElement('strong');
+        const description = document.createElement('span');
+        description.className = 'atlas-fish-description';
+        const level = document.createElement('span');
+        level.className = 'atlas-fish-level';
+        card.append(imageWrap, level, name, description);
+        row = { card, imageWrap, image, name, description, level, signature: null };
+        view.rows[levelIndex] = row;
+        view.nodes.push(card);
+      }
+      // Только изменившаяся карточка: unlock или новая локаль, без повторного src/decode.
+      const signature = `${getLocale()}:${isUnlocked}`;
+      if (row.signature === signature) return;
+      row.signature = signature;
+      const { card, imageWrap, image, name, description, level } = row;
+      card.classList.toggle('is-unlocked', isUnlocked);
+      card.classList.toggle('is-locked', !isUnlocked);
       card.disabled = !isUnlocked;
       card.dataset.level = String(fishData.level);
-      card.style.setProperty('--atlas-index', String(levelIndex));
       card.setAttribute(
         'aria-label',
         isUnlocked
@@ -1303,39 +1342,26 @@ class FruitScene extends Phaser.Scene {
           : t('a11y.atlasLockedCard', { level: fishData.level }),
       );
 
-      const imageWrap = document.createElement('span');
-      imageWrap.className = 'atlas-fish-image-wrap';
-      const image = document.createElement('img');
-      image.className = 'atlas-fish-image';
       const imagePath = isUnlocked ? fishData.texturePath : atlasWorld.lockedTexturePath;
-      this.configureAtlasImage(
-        image,
-        imagePath,
-        atlasWorld.lockedTexturePath,
-        isUnlocked
-          ? characterName(fishData)
-          : t('a11y.lockedCharacterImage', { level: fishData.level }),
-      );
-      imageWrap.appendChild(image);
-
-      const name = document.createElement('strong');
+      const alt = isUnlocked ? characterName(fishData) : t('a11y.lockedCharacterImage', { level: fishData.level });
+      if (row.imagePath !== imagePath) {
+        row.imagePath = imagePath;
+        this.configureAtlasImage(image, imagePath, atlasWorld.lockedTexturePath, alt);
+      } else image.alt = alt;
       name.textContent = isUnlocked ? characterName(fishData) : t('atlas.lockedName');
-      const description = document.createElement('span');
-      description.className = 'atlas-fish-description';
       description.textContent = isUnlocked ? characterDescription(fishData) : ATLAS_CONFIG.lockedDescription;
-
-      const level = document.createElement('span');
-      level.className = 'atlas-fish-level';
       level.textContent = t('atlas.level', { level: fishData.level });
+      imageWrap.classList.toggle('has-character-glow', Boolean(isUnlocked && fishData.glowColor));
       if (isUnlocked && fishData.glowColor) {
         imageWrap.classList.add('has-character-glow');
         imageWrap.style.setProperty('--character-glow-color', fishData.glowColor);
       }
 
-      card.append(imageWrap, level, name, description);
-      if (isUnlocked) card.addEventListener('click', () => this.openFishDetail(levelIndex));
-      ui.atlasGrid.appendChild(card);
     });
+    if (ui.atlasGrid.dataset.world !== atlasWorld.id) {
+      ui.atlasGrid.replaceChildren(...view.nodes);
+      ui.atlasGrid.dataset.world = atlasWorld.id;
+    }
   }
 
   openAtlas() {
@@ -1357,10 +1383,10 @@ class FruitScene extends Phaser.Scene {
 
   closeAtlas() {
     if (ui.atlasModal.hidden) return;
-    this.playSound('button');
     ui.fishDetailModal.hidden = true;
     ui.atlasModal.hidden = true;
     ui.gameWrap.classList.remove('is-atlas-open');
+    this.playSound('button');
     if (this.atlasWasRunning && !this.isPaused && !this.gameEnded) {
       this.time.paused = false;
       this.matter.world.resume();
@@ -2300,22 +2326,22 @@ class FruitScene extends Phaser.Scene {
 
   // ======================== Управление текущей рыбой ========================
 
-  isPointerOnReleasedFruit(pointer) {
+  isSafeGameplayPointer(pointer) {
+    if (this.isMainMenuOpen || ui.gameWrap.querySelector('.modal:not([hidden])')) return false;
     if (!Number.isFinite(pointer.worldX) || !Number.isFinite(pointer.worldY)) return false;
-    for (const fruit of this.fruits.values()) {
-      if (!fruit.physics?.body || fruit.removed) continue;
-      const radius = FRUITS[fruit.level].radius;
-      const dx = pointer.worldX - fruit.physics.x;
-      const dy = pointer.worldY - fruit.physics.y;
-      if (Math.hypot(dx, dy) <= radius) return true;
-    }
-    return false;
+    if (pointer.worldX < 0 || pointer.worldX > GAME_WIDTH
+      || pointer.worldY < SURFACE_Y || pointer.worldY > gameHeight) return false;
+    const event = pointer.event;
+    if (event?.button !== undefined && event.button !== 0) return false;
+    return !event?.target?.closest?.('button, .hud, #progression, .modal');
   }
 
   beginCurrentFruitDrag(pointer) {
     if (!this.currentFruit || !this.canDrop || this.gameEnded || this.isPaused) return;
-    if (this.controlState !== CONTROL_STATES.WAITING || this.isPointerOnReleasedFruit(pointer)) return;
+    if (this.controlState !== CONTROL_STATES.WAITING || !this.isSafeGameplayPointer(pointer)) return;
 
+    // Короткий тап в любом месте поля отпускает рыбу на текущем X.
+    // Если палец движется — прежнее горизонтальное перетаскивание, без скачка к месту тапа.
     pointer.event?.preventDefault?.();
     this.controlState = CONTROL_STATES.DRAGGING;
     this.activePointerId = pointer.id;
@@ -2927,6 +2953,7 @@ class FruitScene extends Phaser.Scene {
 
   openMainMenu() {
     this.isMainMenuOpen = true;
+    ui.gameWrap.classList.add('is-main-menu-open');
     ui.mainMenuWorld.textContent = worldName(this.world);
     const collection = readCollectionLevels(this.world);
     ui.mainMenuProgress.textContent = t('menu.progress', {
@@ -2943,6 +2970,7 @@ class FruitScene extends Phaser.Scene {
 
   closeMainMenu() {
     this.isMainMenuOpen = false;
+    ui.gameWrap.classList.remove('is-main-menu-open');
     ui.mainMenu.hidden = true;
     if (this.gameEnded || this.isPaused) return;
     this.time.paused = false;
@@ -3333,6 +3361,19 @@ ui.progression.addEventListener('click', (event) => {
   activeScene().openAtlas();
 });
 ui.atlasCloseButton.addEventListener('click', () => activeScene().closeAtlas());
+ui.atlasWorldTabs.addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-world]');
+  if (!tab || !WORLDS[tab.dataset.world]) return;
+  const scene = activeScene();
+  scene.playSound('button');
+  scene.atlasWorldId = tab.dataset.world;
+  scene.renderAtlas();
+});
+ui.atlasGrid.addEventListener('click', (event) => {
+  const card = event.target.closest('.atlas-fish-card');
+  if (!card || card.disabled) return;
+  activeScene().openFishDetail(Number(card.dataset.levelIndex));
+});
 ui.atlasModal.addEventListener('click', (event) => {
   if (event.target === ui.atlasModal) activeScene().closeAtlas();
 });

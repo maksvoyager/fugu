@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 // Проверяем отсутствие native-вызовов в браузере и единственный комплект Android listener.
 globalThis.window = {};
+globalThis.document = { documentElement: { classList: { add() {} } } };
 const browser = await import('../src/native-app.js?test=browser');
 assert.equal(browser.isAndroidApp(), false);
 await browser.initializeNativeApp({});
